@@ -73,7 +73,7 @@ export const RegisterPage = () => {
 
     try {
       await register(formData);
-      showSuccess('Account registered successfully! Welcome to CampusSphere.');
+      showSuccess('Account registered successfully! Welcome to CampusSync.');
       navigate('/dashboard');
     } catch (err) {
       const msg = err.response?.data?.message || 'Registration failed. Please verify your details.';
@@ -111,7 +111,7 @@ export const RegisterPage = () => {
             <RegisterIcon />
           </Box>
           <Typography variant="h4" sx={{ fontWeight: 800, color: '#0f172a' }}>
-            Join CampusSphere
+            Join CampusSync
           </Typography>
           <Typography variant="body2" sx={{ color: '#64748b' }}>
             Create your student profile and unlock seamless campus collaboration
@@ -147,7 +147,7 @@ export const RegisterPage = () => {
                 name="email"
                 value={formData.email}
                 onChange={handleChange}
-                placeholder="alex@campussphere.edu"
+                placeholder="alex@campussync.edu"
               />
             </Grid>
 
@@ -252,7 +252,7 @@ export const RegisterPage = () => {
 
           <Box sx={{ textAlign: 'center' }}>
             <Typography variant="body2" sx={{ color: '#64748b' }}>
-              Already registered on CampusSphere?{' '}
+              Already registered on CampusSync?{' '}
               <RouterLink to="/login" style={{ color: '#2563eb', fontWeight: 700 }}>
                 Sign in here
               </RouterLink>

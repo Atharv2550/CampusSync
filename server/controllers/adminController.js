@@ -1,4 +1,6 @@
 import { User } from '../models/User.js';
+import { Club } from '../models/Club.js';
+import { CampusResource } from '../models/CampusResource.js';
 import { MarketplaceListing } from '../models/MarketplaceListing.js';
 import { LostFoundItem } from '../models/LostFoundItem.js';
 import { AuditLog } from '../models/AuditLog.js';
@@ -29,6 +31,8 @@ export const getUsers = async (req, res, next) => {
     const users = await User.find(filter)
       .populate('department', 'name code')
       .populate('assignedClub', 'name code')
+      .populate('assignedClubs', 'name code')
+      .populate('assignedResources', 'name type location')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit, 10));
@@ -49,7 +53,7 @@ export const getUsers = async (req, res, next) => {
 
 export const updateUserStatus = async (req, res, next) => {
   try {
-    const { status, role, assignedClub } = req.body;
+    const { status, role, assignedClub, assignedClubs, assignedResources } = req.body;
     const user = await User.findById(req.params.id);
 
     if (!user) {
@@ -57,12 +61,12 @@ export const updateUserStatus = async (req, res, next) => {
     }
 
     // Safety: prevent suspending oneself
-    if (user._id.toString() === req.user._id.toString()) {
-      return res.status(400).json({ success: false, message: 'Administrators cannot change their own status or role.' });
+    if (user._id.toString() === req.user._id.toString() && (status === 'suspended' || status === 'inactive')) {
+      return res.status(400).json({ success: false, message: 'Administrators cannot suspend or deactivate their own account.' });
     }
 
     // Safety: protect the last remaining active administrator
-    if (user.role === 'admin' && (status === 'suspended' || (role && role !== 'admin'))) {
+    if (user.role === 'admin' && (status === 'suspended' || status === 'inactive' || (role && role !== 'admin'))) {
       const activeAdminsCount = await User.countDocuments({ role: 'admin', status: 'active' });
       if (activeAdminsCount <= 1) {
         return res.status(400).json({
@@ -72,11 +76,57 @@ export const updateUserStatus = async (req, res, next) => {
       }
     }
 
-    if (status) user.status = status;
-    if (role) user.role = role;
-    if (assignedClub !== undefined) user.assignedClub = assignedClub || null;
+    if (status && ['active', 'suspended', 'pending', 'inactive'].includes(status)) {
+      user.status = status;
+    }
+    if (role && ['student', 'faculty', 'coordinator', 'resource_manager', 'admin'].includes(role)) {
+      user.role = role;
+    }
+
+    // Handle club assignment updates
+    if (assignedClub !== undefined || assignedClubs !== undefined) {
+      const oldClubIds = [
+        ...(user.assignedClub ? [user.assignedClub.toString()] : []),
+        ...((user.assignedClubs || []).map((c) => c.toString())),
+      ];
+      const newClubsList = assignedClubs && Array.isArray(assignedClubs)
+        ? assignedClubs
+        : (assignedClub ? [assignedClub] : []);
+
+      user.assignedClub = assignedClub || (newClubsList[0] || null);
+      user.assignedClubs = newClubsList;
+
+      // Sync club coordinators
+      const removedClubs = oldClubIds.filter((cid) => !newClubsList.map((c) => c.toString()).includes(cid));
+      if (removedClubs.length > 0) {
+        await Club.updateMany({ _id: { $in: removedClubs } }, { $pull: { coordinators: user._id } });
+      }
+      if (newClubsList.length > 0) {
+        await Club.updateMany({ _id: { $in: newClubsList } }, { $addToSet: { coordinators: user._id } });
+      }
+    }
+
+    // Handle resource assignment updates
+    if (assignedResources !== undefined) {
+      const oldResourceIds = (user.assignedResources || []).map((r) => r.toString());
+      const newResourcesList = Array.isArray(assignedResources) ? assignedResources : [];
+      user.assignedResources = newResourcesList;
+
+      // Sync resource managers
+      const removedResources = oldResourceIds.filter((rid) => !newResourcesList.map((r) => r.toString()).includes(rid));
+      if (removedResources.length > 0) {
+        await CampusResource.updateMany({ _id: { $in: removedResources } }, { $pull: { managers: user._id } });
+      }
+      if (newResourcesList.length > 0) {
+        await CampusResource.updateMany({ _id: { $in: newResourcesList } }, { $addToSet: { managers: user._id } });
+      }
+    }
 
     await user.save();
+    await user.populate('department', 'name code');
+    await user.populate('assignedClub', 'name code');
+    await user.populate('assignedClubs', 'name code');
+    await user.populate('assignedResources', 'name type location');
 
     await logAuditEvent({
       user: req.user,
@@ -480,3 +530,292 @@ export const updateFaculty = async (req, res, next) => {
     next(error);
   }
 };
+
+export const createStaffAccount = async (req, res, next) => {
+  try {
+    const {
+      fullName,
+      email,
+      password,
+      role = 'coordinator',
+      employeeId,
+      studentId,
+      department,
+      designation,
+      phoneNumber,
+      status = 'active',
+      assignedClub,
+      assignedClubs,
+      assignedResources,
+    } = req.body;
+
+    if (!fullName?.trim() || !email?.trim() || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Full name, official email, and initial password are required.',
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Initial password must be at least 6 characters.',
+      });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    const existingEmail = await User.findOne({ email: cleanEmail });
+    if (existingEmail) {
+      return res.status(409).json({
+        success: false,
+        message: `An account with email "${cleanEmail}" already exists.`,
+      });
+    }
+
+    if (employeeId) {
+      const cleanEmpId = employeeId.toUpperCase().trim();
+      const existingEmp = await User.findOne({ employeeId: cleanEmpId });
+      if (existingEmp) {
+        return res.status(409).json({
+          success: false,
+          message: `An account with Employee ID "${cleanEmpId}" already exists.`,
+        });
+      }
+    }
+
+    const clubsList = assignedClubs && Array.isArray(assignedClubs)
+      ? assignedClubs
+      : (assignedClub ? [assignedClub] : []);
+    const resourcesList = assignedResources && Array.isArray(assignedResources)
+      ? assignedResources
+      : [];
+
+    const defaultDesignations = {
+      faculty: 'Assistant Professor',
+      coordinator: 'Club Coordinator',
+      resource_manager: 'Resource Facility Manager',
+      admin: 'Campus Administrator',
+      student: 'Student',
+    };
+
+    const newUser = new User({
+      fullName: fullName.trim(),
+      email: cleanEmail,
+      employeeId: employeeId ? employeeId.toUpperCase().trim() : undefined,
+      studentId: studentId ? studentId.trim() : undefined,
+      password,
+      role,
+      department: department || null,
+      designation: designation?.trim() || defaultDesignations[role] || 'Staff',
+      phoneNumber: phoneNumber?.trim() || '',
+      academicYear: role === 'student' ? '1st Year' : 'Faculty/Staff',
+      status: ['active', 'suspended', 'pending', 'inactive'].includes(status) ? status : 'active',
+      assignedClub: assignedClub || (clubsList[0] || null),
+      assignedClubs: clubsList,
+      assignedResources: resourcesList,
+    });
+
+    await newUser.save();
+
+    // Synchronize Club coordinators
+    if (clubsList.length > 0) {
+      await Club.updateMany({ _id: { $in: clubsList } }, { $addToSet: { coordinators: newUser._id } });
+    }
+
+    // Synchronize CampusResource managers
+    if (resourcesList.length > 0) {
+      await CampusResource.updateMany({ _id: { $in: resourcesList } }, { $addToSet: { managers: newUser._id } });
+    }
+
+    await newUser.populate('department', 'name code');
+    await newUser.populate('assignedClub', 'name code');
+    await newUser.populate('assignedClubs', 'name code');
+    await newUser.populate('assignedResources', 'name type location');
+
+    await logAuditEvent({
+      user: req.user,
+      action: 'STAFF_ACCOUNT_CREATED',
+      targetType: 'User',
+      targetId: newUser._id,
+      details: {
+        fullName: newUser.fullName,
+        email: newUser.email,
+        role: newUser.role,
+        status: newUser.status,
+      },
+      req,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: `${role.replace('_', ' ')} account for ${newUser.fullName} created successfully.`,
+      data: newUser,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateStaffAccount = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const {
+      fullName,
+      email,
+      role,
+      employeeId,
+      studentId,
+      department,
+      designation,
+      phoneNumber,
+      status,
+      password,
+      assignedClub,
+      assignedClubs,
+      assignedResources,
+    } = req.body;
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User account not found.' });
+    }
+
+    // Safety: prevent suspending/deactivating oneself
+    if (user._id.toString() === req.user._id.toString() && (status === 'suspended' || status === 'inactive')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Administrators cannot suspend or deactivate their own account.',
+      });
+    }
+
+    // Safety: protect last remaining admin
+    if (user.role === 'admin' && (status === 'suspended' || status === 'inactive' || (role && role !== 'admin'))) {
+      const activeAdminsCount = await User.countDocuments({ role: 'admin', status: 'active' });
+      if (activeAdminsCount <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: 'Operation denied: Cannot deactivate or demote the last remaining active administrator.',
+        });
+      }
+    }
+
+    if (email) {
+      const cleanEmail = email.toLowerCase().trim();
+      if (cleanEmail !== user.email) {
+        const existingEmail = await User.findOne({ email: cleanEmail, _id: { $ne: user._id } });
+        if (existingEmail) {
+          return res.status(409).json({
+            success: false,
+            message: `An account with email "${cleanEmail}" already exists.`,
+          });
+        }
+        user.email = cleanEmail;
+      }
+    }
+
+    if (employeeId) {
+      const cleanEmpId = employeeId.toUpperCase().trim();
+      if (cleanEmpId !== user.employeeId) {
+        const existingEmp = await User.findOne({ employeeId: cleanEmpId, _id: { $ne: user._id } });
+        if (existingEmp) {
+          return res.status(409).json({
+            success: false,
+            message: `An account with Employee ID "${cleanEmpId}" already exists.`,
+          });
+        }
+        user.employeeId = cleanEmpId;
+      }
+    }
+
+    if (fullName?.trim()) user.fullName = fullName.trim();
+    if (role && ['student', 'faculty', 'coordinator', 'resource_manager', 'admin'].includes(role)) {
+      user.role = role;
+    }
+    if (studentId !== undefined) user.studentId = studentId.trim();
+    if (department !== undefined) user.department = department || null;
+    if (designation !== undefined) user.designation = designation.trim();
+    if (phoneNumber !== undefined) user.phoneNumber = phoneNumber.trim();
+    if (status && ['active', 'suspended', 'pending', 'inactive'].includes(status)) {
+      user.status = status;
+    }
+
+    if (password) {
+      if (password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password must be at least 6 characters long.',
+        });
+      }
+      user.password = password;
+    }
+
+    // Handle club assignment updates & synchronization
+    if (assignedClub !== undefined || assignedClubs !== undefined) {
+      const oldClubIds = [
+        ...(user.assignedClub ? [user.assignedClub.toString()] : []),
+        ...((user.assignedClubs || []).map((c) => c.toString())),
+      ];
+
+      const newClubsList = assignedClubs && Array.isArray(assignedClubs)
+        ? assignedClubs
+        : (assignedClub ? [assignedClub] : []);
+
+      user.assignedClub = assignedClub || (newClubsList[0] || null);
+      user.assignedClubs = newClubsList;
+
+      const removedClubs = oldClubIds.filter((cid) => !newClubsList.map((c) => c.toString()).includes(cid));
+      if (removedClubs.length > 0) {
+        await Club.updateMany({ _id: { $in: removedClubs } }, { $pull: { coordinators: user._id } });
+      }
+
+      if (newClubsList.length > 0) {
+        await Club.updateMany({ _id: { $in: newClubsList } }, { $addToSet: { coordinators: user._id } });
+      }
+    }
+
+    // Handle resource assignment updates & synchronization
+    if (assignedResources !== undefined) {
+      const oldResourceIds = (user.assignedResources || []).map((r) => r.toString());
+      const newResourcesList = Array.isArray(assignedResources) ? assignedResources : [];
+      user.assignedResources = newResourcesList;
+
+      const removedResources = oldResourceIds.filter((rid) => !newResourcesList.map((r) => r.toString()).includes(rid));
+      if (removedResources.length > 0) {
+        await CampusResource.updateMany({ _id: { $in: removedResources } }, { $pull: { managers: user._id } });
+      }
+
+      if (newResourcesList.length > 0) {
+        await CampusResource.updateMany({ _id: { $in: newResourcesList } }, { $addToSet: { managers: user._id } });
+      }
+    }
+
+    await user.save();
+    await user.populate('department', 'name code');
+    await user.populate('assignedClub', 'name code');
+    await user.populate('assignedClubs', 'name code');
+    await user.populate('assignedResources', 'name type location');
+
+    await logAuditEvent({
+      user: req.user,
+      action: 'STAFF_ACCOUNT_UPDATED',
+      targetType: 'User',
+      targetId: user._id,
+      details: {
+        fullName: user.fullName,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+      },
+      req,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Account for ${user.fullName} updated successfully.`,
+      data: user,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

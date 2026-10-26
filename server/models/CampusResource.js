@@ -45,6 +45,12 @@ const campusResourceSchema = new mongoose.Schema(
       ref: 'Department',
       default: null,
     },
+    managers: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
     isMaintenance: {
       type: Boolean,
       default: false,

@@ -176,7 +176,7 @@ export const AppLayout = () => {
         </Box>
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 800, lineHeight: 1.1, color: '#0f172a' }}>
-            CampusSphere
+            CampusSync
           </Typography>
           <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600, letterSpacing: '0.04em' }}>
             SMART CAMPUS HUB
@@ -403,7 +403,7 @@ export const AppLayout = () => {
               <MenuIcon />
             </IconButton>
             <Typography variant="h6" sx={{ fontWeight: 700, fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-              CampusSphere
+              CampusSync
             </Typography>
           </Box>
 

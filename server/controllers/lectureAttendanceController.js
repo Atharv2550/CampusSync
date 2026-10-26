@@ -125,18 +125,55 @@ export const recordAttendance = async (req, res, next) => {
       }
     }
 
-    // 4. Duplicate Attendance Check for the exact lecture slot on this date
+    // 4. Resolve TimetableEntry or DutyAssignment identity
     const startOfDay = new Date(normalizedLectureDate);
     const endOfDay = new Date(normalizedLectureDate);
     endOfDay.setUTCHours(23, 59, 59, 999);
 
-    const existing = await LectureAttendance.findOne({
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const lectureDayOfWeek = dayNames[normalizedLectureDate.getUTCDay()];
+
+    let resolvedTimetableEntry = (timetableEntry && mongoose.Types.ObjectId.isValid(timetableEntry)) ? timetableEntry : null;
+    if (!resolvedTimetableEntry) {
+      const matchedEntry = await TimetableEntry.findOne({
+        faculty: facultyId,
+        subject,
+        classDivision,
+        dayOfWeek: lectureDayOfWeek,
+        startTime: startTime.trim(),
+        status: 'Published',
+      });
+      if (matchedEntry) {
+        resolvedTimetableEntry = matchedEntry._id;
+      }
+    }
+
+    let resolvedDutyAssignment = (dutyAssignment && mongoose.Types.ObjectId.isValid(dutyAssignment)) ? dutyAssignment : null;
+    if (!resolvedDutyAssignment) {
+      const matchedDuty = await DutyAssignment.findOne({
+        faculty: facultyId,
+        subject,
+        classDivision,
+        date: { $gte: startOfDay, $lte: endOfDay },
+        startTime: startTime.trim(),
+        status: { $in: ['Assigned', 'Acknowledged', 'Completed'] },
+      });
+      if (matchedDuty) {
+        resolvedDutyAssignment = matchedDuty._id;
+      }
+    }
+
+    // 5. Duplicate Attendance Check for the exact lecture slot on this date
+    const duplicateQuery = {
       faculty: facultyId,
-      subject,
-      classDivision,
       date: { $gte: startOfDay, $lte: endOfDay },
-      startTime: startTime.trim(),
-    });
+      $or: [
+        { subject, classDivision, startTime: startTime.trim() },
+        ...(resolvedTimetableEntry ? [{ timetableEntry: resolvedTimetableEntry }] : []),
+      ],
+    };
+
+    const existing = await LectureAttendance.findOne(duplicateQuery);
 
     if (existing) {
       return res.status(409).json({
@@ -149,7 +186,7 @@ export const recordAttendance = async (req, res, next) => {
           date: existing.date,
           startTime: existing.startTime,
           endTime: existing.endTime,
-          sessionStatus: existing.sessionStatus,
+          sessionStatus: existing.sessionStatus || 'Submitted',
           attendanceRate: existing.summary?.attendanceRate,
           totalStudents: existing.summary?.totalStudents,
           presentCount: existing.summary?.presentCount,
@@ -159,11 +196,11 @@ export const recordAttendance = async (req, res, next) => {
       });
     }
 
-    // 5. Fetch class division details for academic year & semester
+    // 6. Fetch class division details for academic year & semester
     const classDivDoc = await ClassDivision.findById(classDivision).lean();
     const subjectDoc = await Subject.findById(subject).lean();
 
-    // 6. Compute summary metrics according to institutional late policy
+    // 7. Compute summary metrics according to institutional late policy
     const totalStudents = sanitizedRecords.length;
     const presentCount = sanitizedRecords.filter((r) => r.status === 'Present').length;
     const lateCount = sanitizedRecords.filter((r) => r.status === 'Late').length;
@@ -173,10 +210,10 @@ export const recordAttendance = async (req, res, next) => {
     const effectivePresent = presentCount + lateCredit * lateCount;
     const attendanceRate = totalStudents > 0 ? Math.round((effectivePresent / totalStudents) * 100) : 0;
 
-    // 7. Persist Attendance Session
+    // 8. Persist Attendance Session
     const attendance = await LectureAttendance.create({
-      timetableEntry: timetableEntry || null,
-      dutyAssignment: dutyAssignment || null,
+      timetableEntry: resolvedTimetableEntry || null,
+      dutyAssignment: resolvedDutyAssignment || null,
       faculty: facultyId,
       subject,
       classDivision,
@@ -201,6 +238,7 @@ export const recordAttendance = async (req, res, next) => {
       .populate('faculty', 'fullName email')
       .populate('subject', 'name code semester credits')
       .populate('classDivision', 'name code department semester academicYear')
+      .populate('timetableEntry')
       .populate('records.student', 'fullName email studentId avatar');
 
     // 8. Audit log entry
@@ -240,9 +278,9 @@ export const recordAttendance = async (req, res, next) => {
 export const checkExistingSession = async (req, res, next) => {
   try {
     const facultyId = req.user._id;
-    const { subject, classDivision, date, startTime } = req.query;
+    const { subject, classDivision, date, startTime, timetableEntry } = req.query;
 
-    if (!subject || !classDivision || !date) {
+    if (!date) {
       return res.json({ success: true, exists: false, session: null });
     }
 
@@ -255,19 +293,32 @@ export const checkExistingSession = async (req, res, next) => {
     const endOfDay = new Date(normalizedDate);
     endOfDay.setUTCHours(23, 59, 59, 999);
 
+    const conditions = [];
+    if (subject && classDivision) {
+      const cond = { subject, classDivision };
+      if (startTime && startTime.trim()) {
+        cond.startTime = startTime.trim();
+      }
+      conditions.push(cond);
+    }
+    if (timetableEntry && mongoose.Types.ObjectId.isValid(timetableEntry)) {
+      conditions.push({ timetableEntry });
+    }
+
+    if (conditions.length === 0) {
+      return res.json({ success: true, exists: false, session: null });
+    }
+
     const query = {
       faculty: facultyId,
-      subject,
-      classDivision,
       date: { $gte: startOfDay, $lte: endOfDay },
+      $or: conditions,
     };
-    if (startTime && startTime.trim()) {
-      query.startTime = startTime.trim();
-    }
 
     const existing = await LectureAttendance.findOne(query)
       .populate('subject', 'name code')
       .populate('classDivision', 'name code')
+      .populate('timetableEntry')
       .populate('records.student', 'fullName email studentId avatar')
       .lean();
 
@@ -309,9 +360,26 @@ export const getAttendanceSessions = async (req, res, next) => {
       filter.faculty = req.query.faculty;
     }
 
-    if (subject) filter.subject = subject;
-    if (classDivision) filter.classDivision = classDivision;
-    if (status) filter.sessionStatus = status;
+    if (subject && mongoose.Types.ObjectId.isValid(subject)) filter.subject = subject;
+    if (classDivision && mongoose.Types.ObjectId.isValid(classDivision)) filter.classDivision = classDivision;
+
+    if (status && status.trim()) {
+      const s = status.trim().toLowerCase();
+      if (s === 'submitted') {
+        filter.$or = [
+          { sessionStatus: 'Submitted' },
+          { sessionStatus: { $exists: false } },
+          { sessionStatus: null },
+          { sessionStatus: 'submitted' },
+        ];
+      } else if (s === 'corrected') {
+        filter.sessionStatus = 'Corrected';
+      } else if (s === 'cancelled') {
+        filter.sessionStatus = 'Cancelled';
+      } else if (s !== 'all' && s !== '') {
+        filter.sessionStatus = status.trim();
+      }
+    }
 
     if (startDate || endDate) {
       filter.date = {};
@@ -343,6 +411,7 @@ export const getAttendanceSessions = async (req, res, next) => {
         .populate('faculty', 'fullName email')
         .populate('subject', 'name code semester credits')
         .populate('classDivision', 'name code semester academicYear')
+        .populate('timetableEntry')
         .populate('records.student', 'fullName email studentId avatar')
         .sort(sort)
         .skip(skip)
@@ -876,7 +945,7 @@ export const getMissingAttendance = async (req, res, next) => {
   try {
     const facultyId = req.user._id;
 
-    // Get published timetable entries for this faculty
+    // 1. Get published timetable entries for this faculty
     const entries = await TimetableEntry.find({
       faculty: facultyId,
       status: 'Published',
@@ -885,57 +954,162 @@ export const getMissingAttendance = async (req, res, next) => {
       .populate('classDivision', 'name code')
       .lean();
 
-    if (entries.length === 0) {
-      return res.json({ success: true, count: 0, data: [] });
-    }
+    // 2. Fetch approved substitution duties involving this faculty (both relieved and assigned)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
 
-    // Inspect the past 7 days (excluding future dates)
-    const today = new Date();
+    const [relievedDuties, assignedSubstitutions] = await Promise.all([
+      DutyAssignment.find({
+        originalFaculty: facultyId,
+        type: 'Substitution',
+        status: { $in: ['Assigned', 'Acknowledged', 'Completed'] },
+        date: { $gte: sevenDaysAgo },
+      }).lean(),
+      DutyAssignment.find({
+        faculty: facultyId,
+        type: 'Substitution',
+        status: { $in: ['Assigned', 'Acknowledged', 'Completed'] },
+        date: { $gte: sevenDaysAgo },
+      })
+        .populate('subject', 'name code')
+        .populate('classDivision', 'name code')
+        .lean(),
+    ]);
+
+    const now = new Date();
+    const currentHourMin = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
     const missing = [];
+    const seenKeys = new Set();
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-    for (let i = 1; i <= 7; i++) {
-      const pastDate = new Date(today);
-      pastDate.setDate(today.getDate() - i);
+    // Inspect from today (i=0) back 7 days (i=7)
+    for (let i = 0; i <= 7; i++) {
+      const pastDate = new Date(now);
+      pastDate.setDate(now.getDate() - i);
       const normalizedPast = normalizeDate(pastDate);
+      if (!normalizedPast) continue;
+
       const dayOfWeek = dayNames[normalizedPast.getUTCDay()];
+      if (dayOfWeek === 'Sunday') continue; // Standard holiday
 
-      if (dayOfWeek === 'Sunday') continue; // Skip Sunday
+      const startOfDay = new Date(normalizedPast);
+      const endOfDay = new Date(normalizedPast);
+      endOfDay.setUTCHours(23, 59, 59, 999);
 
-      // Find timetable entries scheduled on this day of week
+      // Check regular timetable entries for this day
       const scheduledForDay = entries.filter((e) => e.dayOfWeek === dayOfWeek);
 
       for (const entry of scheduledForDay) {
         if (!entry.subject || !entry.classDivision) continue;
 
-        // Check if attendance exists
-        const startOfDay = new Date(normalizedPast);
-        const endOfDay = new Date(normalizedPast);
-        endOfDay.setUTCHours(23, 59, 59, 999);
+        // If today, only check if scheduled lecture time has arrived or passed
+        if (i === 0 && entry.startTime > currentHourMin) {
+          continue; // Slot hasn't started yet today
+        }
 
-        const exists = await LectureAttendance.exists({
-          faculty: facultyId,
-          subject: entry.subject._id,
-          classDivision: entry.classDivision._id,
-          date: { $gte: startOfDay, $lte: endOfDay },
-          startTime: entry.startTime,
+        // Check if regular faculty was relieved by an approved substitution on this date & slot
+        const isRelieved = relievedDuties.some((d) => {
+          const dDate = new Date(d.date);
+          const sameDay = dDate.toISOString().split('T')[0] === normalizedPast.toISOString().split('T')[0];
+          const subMatch = d.subject?.toString() === entry.subject._id?.toString();
+          const classMatch = d.classDivision?.toString() === entry.classDivision._id?.toString();
+          const timeMatch = d.startTime === entry.startTime;
+          return sameDay && subMatch && classMatch && timeMatch;
         });
 
-        if (!exists) {
+        if (isRelieved) {
+          continue; // Duty covered by substitute instructor
+        }
+
+        // Check if attendance exists via canonical identity (timetableEntry OR subject+class+slot)
+        const exists = await LectureAttendance.exists({
+          faculty: facultyId,
+          date: { $gte: startOfDay, $lte: endOfDay },
+          sessionStatus: { $ne: 'Cancelled' },
+          $or: [
+            { timetableEntry: entry._id },
+            {
+              subject: entry.subject._id,
+              classDivision: entry.classDivision._id,
+              startTime: entry.startTime,
+            },
+          ],
+        });
+
+        const dedupeKey = `${entry._id}-${normalizedPast.toISOString().split('T')[0]}`;
+        if (!exists && !seenKeys.has(dedupeKey)) {
+          seenKeys.add(dedupeKey);
           missing.push({
+            timetableEntryId: entry._id,
             date: normalizedPast,
+            dateStr: normalizedPast.toISOString().split('T')[0],
             dayOfWeek,
             startTime: entry.startTime,
             endTime: entry.endTime,
             room: entry.room,
-            activityType: entry.activityType,
+            activityType: entry.activityType || 'Theory',
             subject: entry.subject,
             classDivision: entry.classDivision,
             status: 'Not Recorded',
           });
         }
       }
+
+      // Check assigned substitutions for this faculty on this date
+      const subsForDay = assignedSubstitutions.filter((s) => {
+        const sDate = new Date(s.date);
+        return sDate.toISOString().split('T')[0] === normalizedPast.toISOString().split('T')[0];
+      });
+
+      for (const subDuty of subsForDay) {
+        if (!subDuty.subject || !subDuty.classDivision) continue;
+
+        if (i === 0 && subDuty.startTime > currentHourMin) {
+          continue;
+        }
+
+        const existsSub = await LectureAttendance.exists({
+          faculty: facultyId,
+          date: { $gte: startOfDay, $lte: endOfDay },
+          sessionStatus: { $ne: 'Cancelled' },
+          $or: [
+            { dutyAssignment: subDuty._id },
+            {
+              subject: subDuty.subject._id,
+              classDivision: subDuty.classDivision._id,
+              startTime: subDuty.startTime,
+            },
+          ],
+        });
+
+        const dedupeKey = `duty-${subDuty._id}-${normalizedPast.toISOString().split('T')[0]}`;
+        if (!existsSub && !seenKeys.has(dedupeKey)) {
+          seenKeys.add(dedupeKey);
+          missing.push({
+            dutyAssignmentId: subDuty._id,
+            date: normalizedPast,
+            dateStr: normalizedPast.toISOString().split('T')[0],
+            dayOfWeek,
+            startTime: subDuty.startTime,
+            endTime: subDuty.endTime,
+            room: subDuty.room || 'LH-101',
+            activityType: 'Substitution',
+            subject: subDuty.subject,
+            classDivision: subDuty.classDivision,
+            status: 'Not Recorded',
+          });
+        }
+      }
     }
+
+    // Sort descending by date, then startTime
+    missing.sort((a, b) => {
+      const cmpDate = new Date(b.date) - new Date(a.date);
+      if (cmpDate !== 0) return cmpDate;
+      return b.startTime.localeCompare(a.startTime);
+    });
 
     return res.json({ success: true, count: missing.length, data: missing });
   } catch (error) {

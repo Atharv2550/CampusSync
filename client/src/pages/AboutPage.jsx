@@ -7,10 +7,10 @@ export const AboutPage = () => {
     <Container maxWidth="lg" sx={{ py: 8 }}>
       <Box sx={{ textAlign: 'center', mb: 8 }}>
         <Typography variant="h2" sx={{ fontWeight: 800, color: '#0f172a', mb: 2 }}>
-          About CampusSphere
+          About CampusSync
         </Typography>
         <Typography variant="h6" sx={{ color: '#64748b', maxWidth: 700, mx: 'auto' }}>
-          One Campus. One Community. Endless Possibilities.
+          One Campus. Everything in Sync.
         </Typography>
       </Box>
 
@@ -24,7 +24,7 @@ export const AboutPage = () => {
               Colleges and universities are dynamic ecosystems brimming with intellectual potential. Yet, crucial campus experiences—registering for club hackathons, retrieving a lost calculator, exchanging textbooks, booking research labs, and finding a tutor—remain fragmented across dispersed noticeboards and chat groups.
             </Typography>
             <Typography variant="body1" sx={{ color: '#475569', lineHeight: 1.7 }}>
-              CampusSphere unites these core workflows into one verified digital community where trust, safety, and mutual collaboration thrive.
+              CampusSync unites these core workflows into one verified digital community where trust, safety, and mutual collaboration thrive.
             </Typography>
           </Paper>
         </Grid>

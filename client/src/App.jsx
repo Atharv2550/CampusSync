@@ -29,6 +29,8 @@ import { useAuth } from './context/AuthContext';
 // Authenticated Pages
 import { StudentDashboard } from './features/dashboard/StudentDashboard';
 import { FacultyDashboard } from './features/dashboard/FacultyDashboard';
+import { CoordinatorDashboard } from './features/dashboard/CoordinatorDashboard';
+import { ResourceManagerDashboard } from './features/dashboard/ResourceManagerDashboard';
 import { FacultyTimetablePage } from './features/faculty/FacultyTimetablePage';
 import { FacultySubjectsPage } from './features/faculty/FacultySubjectsPage';
 import { FacultyAttendancePage } from './features/faculty/FacultyAttendancePage';
@@ -56,8 +58,17 @@ import { ProfilePage } from './features/profile/ProfilePage';
 
 function DashboardRouter() {
   const { user } = useAuth();
+  if (user?.role === 'admin') {
+    return <Navigate to="/admin" replace />;
+  }
   if (user?.role === 'faculty') {
     return <FacultyDashboard />;
+  }
+  if (user?.role === 'coordinator') {
+    return <CoordinatorDashboard />;
+  }
+  if (user?.role === 'resource_manager') {
+    return <ResourceManagerDashboard />;
   }
   return <StudentDashboard />;
 }
@@ -112,6 +123,14 @@ export function App() {
                       <Route path="/faculty/duties" element={<FacultyDutiesPage />} />
                       <Route path="/faculty/supervision" element={<FacultySupervisionPage />} />
                       <Route path="/faculty/approvals" element={<FacultyApprovalsPage />} />
+                    </Route>
+
+                    {/* Role-Specific Direct Dashboard Routes */}
+                    <Route element={<ProtectedRoute allowedRoles={['coordinator', 'admin']} />}>
+                      <Route path="/coordinator/dashboard" element={<CoordinatorDashboard />} />
+                    </Route>
+                    <Route element={<ProtectedRoute allowedRoles={['resource_manager', 'admin']} />}>
+                      <Route path="/resource-manager/dashboard" element={<ResourceManagerDashboard />} />
                     </Route>
 
                     {/* Staff / Coordinator / Admin Analytics */}

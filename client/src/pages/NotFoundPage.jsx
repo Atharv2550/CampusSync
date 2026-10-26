@@ -26,7 +26,7 @@ export const NotFoundPage = () => {
           onClick={() => navigate('/')}
           sx={{ borderRadius: 2.5, px: 3, py: 1.2 }}
         >
-          Return to CampusSphere
+          Return to CampusSync
         </Button>
       </Paper>
     </Container>

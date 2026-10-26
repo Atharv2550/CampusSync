@@ -96,8 +96,26 @@ export const createResource = async (req, res, next) => {
   }
 };
 
+export const getAuthorizedResourceIds = async (user) => {
+  if (user.role === 'admin') return null; // All resources permitted
+  const fromUser = (user.assignedResources || []).map((r) => (r._id ? r._id.toString() : r.toString()));
+  const managed = await CampusResource.find({ managers: user._id }).select('_id');
+  const allIds = Array.from(new Set([...fromUser, ...managed.map((m) => m._id.toString())]));
+  return allIds;
+};
+
 export const updateResource = async (req, res, next) => {
   try {
+    if (req.user.role === 'resource_manager') {
+      const authorizedIds = await getAuthorizedResourceIds(req.user);
+      if (!authorizedIds.includes(req.params.id)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: You are not authorized to manage this campus resource.',
+        });
+      }
+    }
+
     const resource = await CampusResource.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
@@ -235,8 +253,22 @@ export const getBookings = async (req, res, next) => {
     if (status) filter.status = status;
     if (resourceId) filter.resource = resourceId;
 
-    // Normal students only see their own bookings unless resource manager or admin
-    if (req.user.role !== 'admin' && req.user.role !== 'resource_manager') {
+    if (req.user.role === 'admin') {
+      // Unrestricted admin view
+    } else if (req.user.role === 'resource_manager') {
+      const authorizedIds = await getAuthorizedResourceIds(req.user);
+      if (resourceId) {
+        if (!authorizedIds.includes(resourceId.toString())) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied: You are not authorized to view bookings for this resource.',
+          });
+        }
+      } else {
+        filter.resource = { $in: authorizedIds };
+      }
+    } else {
+      // Normal students, faculty, coordinators only view bookings they requested
       filter.requestedBy = req.user._id;
     }
 
@@ -261,6 +293,17 @@ export const reviewBooking = async (req, res, next) => {
 
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking request not found' });
+    }
+
+    // Authorization check for resource managers
+    if (req.user.role === 'resource_manager') {
+      const authorizedIds = await getAuthorizedResourceIds(req.user);
+      if (!authorizedIds.includes(booking.resource._id.toString())) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: You are not authorized to review bookings for this resource.',
+        });
+      }
     }
 
     // Atomic server-side anti-overlap check before approving

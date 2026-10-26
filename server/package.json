@@ -2,7 +2,7 @@
   "name": "campussphere-server",
   "version": "1.0.0",
   "type": "module",
-  "description": "CampusSphere Backend API with Express, Mongoose, Socket.IO & JWT",
+  "description": "CampusSync Backend API with Express, Mongoose, Socket.IO & JWT",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

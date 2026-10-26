@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -49,15 +49,39 @@ import {
 import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
 
+// Helper to determine scheduled slots for a given date string
+const getSlotsForDate = (subItem, dateStr) => {
+  if (!subItem?.scheduleSlots || !dateStr) return [];
+  try {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const d = new Date(Date.UTC(year, month - 1, day));
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayOfWeek = dayNames[d.getUTCDay()];
+    return subItem.scheduleSlots.filter((s) => s.dayOfWeek === dayOfWeek);
+  } catch {
+    return [];
+  }
+};
+
 export const FacultyAttendancePage = () => {
   const { showSuccess, showError } = useToast();
+  const [searchParams] = useSearchParams();
+
+  // Query parameter deep-linking from Timetable or Missing Attendance
+  const paramSubject = searchParams.get('subject');
+  const paramClass = searchParams.get('classDivision');
+  const paramDate = searchParams.get('date');
+  const paramStartTime = searchParams.get('startTime');
+  const paramEndTime = searchParams.get('endTime');
+  const paramTimetableEntry = searchParams.get('timetableEntry');
 
   const [loading, setLoading] = useState(true);
   const [assignedSubjects, setAssignedSubjects] = useState([]);
   const [selectedSubjectKey, setSelectedSubjectKey] = useState('');
-  const [lectureDate, setLectureDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [startTime, setStartTime] = useState('09:00');
-  const [endTime, setEndTime] = useState('10:00');
+  const [lectureDate, setLectureDate] = useState(() => paramDate || new Date().toISOString().split('T')[0]);
+  const [startTime, setStartTime] = useState(() => paramStartTime || '09:00');
+  const [endTime, setEndTime] = useState(() => paramEndTime || '10:00');
+  const [selectedTimetableEntryId, setSelectedTimetableEntryId] = useState(paramTimetableEntry || null);
   const [topic, setTopic] = useState('');
 
   // Attendance Sheet
@@ -89,8 +113,30 @@ export const FacultyAttendancePage = () => {
       setHistory(histRes.data.data || []);
 
       if (subs.length > 0) {
-        setSelectedSubjectKey('0');
-        await loadStudentsForClass(subs[0]);
+        let initialIdx = 0;
+        if (paramSubject && paramClass) {
+          const matchIdx = subs.findIndex(
+            (s) =>
+              (s.subject?._id === paramSubject || s.subject === paramSubject) &&
+              (s.classDivision?._id === paramClass || s.classDivision === paramClass)
+          );
+          if (matchIdx >= 0) initialIdx = matchIdx;
+        }
+        setSelectedSubjectKey(String(initialIdx));
+
+        const targetDate = paramDate || new Date().toISOString().split('T')[0];
+        setLectureDate(targetDate);
+
+        if (paramStartTime) setStartTime(paramStartTime);
+        if (paramEndTime) setEndTime(paramEndTime);
+        if (paramTimetableEntry) setSelectedTimetableEntryId(paramTimetableEntry);
+
+        await loadStudentsForClass(subs[initialIdx], {
+          dateStr: targetDate,
+          overrideStartTime: paramStartTime,
+          overrideEndTime: paramEndTime,
+          overrideTimetableEntry: paramTimetableEntry,
+        });
       }
     } catch (err) {
       console.error('Attendance init error:', err);
@@ -105,7 +151,7 @@ export const FacultyAttendancePage = () => {
   }, []);
 
   // 2. Load Students for Class Division
-  const loadStudentsForClass = async (subItem) => {
+  const loadStudentsForClass = async (subItem, options = {}) => {
     if (!subItem?.classDivision?._id) return;
     try {
       const res = await api.get(`/classes/${subItem.classDivision._id}/students`);
@@ -119,9 +165,22 @@ export const FacultyAttendancePage = () => {
       });
       setAttendanceRecords(initialMap);
 
-      if (subItem.scheduleSlots && subItem.scheduleSlots.length > 0) {
-        setStartTime(subItem.scheduleSlots[0].startTime);
-        setEndTime(subItem.scheduleSlots[0].endTime);
+      if (options.overrideStartTime) {
+        setStartTime(options.overrideStartTime);
+      }
+      if (options.overrideEndTime) {
+        setEndTime(options.overrideEndTime);
+      }
+      if (options.overrideTimetableEntry) {
+        setSelectedTimetableEntryId(options.overrideTimetableEntry);
+      }
+
+      if (!options.overrideStartTime && subItem.scheduleSlots && subItem.scheduleSlots.length > 0) {
+        const slotsForDay = getSlotsForDate(subItem, options.dateStr || lectureDate);
+        const slotToUse = slotsForDay.length > 0 ? slotsForDay[0] : subItem.scheduleSlots[0];
+        setStartTime(slotToUse.startTime);
+        setEndTime(slotToUse.endTime);
+        setSelectedTimetableEntryId(slotToUse.timetableEntryId || null);
       }
     } catch (err) {
       console.error('Failed to load class students:', err);
@@ -130,23 +189,24 @@ export const FacultyAttendancePage = () => {
   };
 
   // 3. Pre-flight Check: Does a session already exist for this subject, date & slot?
-  const checkSessionStatus = useCallback(async (subIdx, dateStr, startStr) => {
+  const checkSessionStatus = useCallback(async (subIdx, dateStr, startStr, ttEntryId) => {
     const subItem = assignedSubjects[Number(subIdx)];
-    if (!subItem?.subject?._id || !subItem?.classDivision?._id || !dateStr || !startStr) {
+    if (!subItem?.subject?._id || !subItem?.classDivision?._id || !dateStr) {
       setExistingSession(null);
       return;
     }
 
     try {
       setCheckingSession(true);
-      const res = await api.get('/attendance/check-session', {
-        params: {
-          subject: subItem.subject._id,
-          classDivision: subItem.classDivision._id,
-          date: dateStr,
-          startTime: startStr,
-        },
-      });
+      const params = {
+        subject: subItem.subject._id,
+        classDivision: subItem.classDivision._id,
+        date: dateStr,
+      };
+      if (startStr) params.startTime = startStr;
+      if (ttEntryId) params.timetableEntry = ttEntryId;
+
+      const res = await api.get('/attendance/check-session', { params });
 
       if (res.data.exists && res.data.session) {
         setExistingSession(res.data.session);
@@ -162,16 +222,29 @@ export const FacultyAttendancePage = () => {
 
   useEffect(() => {
     if (assignedSubjects.length > 0 && selectedSubjectKey !== '') {
-      checkSessionStatus(selectedSubjectKey, lectureDate, startTime);
+      checkSessionStatus(selectedSubjectKey, lectureDate, startTime, selectedTimetableEntryId);
     }
-  }, [selectedSubjectKey, lectureDate, startTime, checkSessionStatus, assignedSubjects.length]);
+  }, [selectedSubjectKey, lectureDate, startTime, selectedTimetableEntryId, checkSessionStatus, assignedSubjects.length]);
 
   const handleSubjectChange = (e) => {
     const idx = e.target.value;
     setSelectedSubjectKey(idx);
     const subItem = assignedSubjects[Number(idx)];
     if (subItem) {
-      loadStudentsForClass(subItem);
+      loadStudentsForClass(subItem, { dateStr: lectureDate });
+    }
+  };
+
+  const handleDateChange = (newDate) => {
+    setLectureDate(newDate);
+    const subItem = assignedSubjects[Number(selectedSubjectKey)];
+    if (subItem) {
+      const slots = getSlotsForDate(subItem, newDate);
+      if (slots.length > 0) {
+        setStartTime(slots[0].startTime);
+        setEndTime(slots[0].endTime);
+        setSelectedTimetableEntryId(slots[0].timetableEntryId || null);
+      }
     }
   };
 
@@ -196,6 +269,10 @@ export const FacultyAttendancePage = () => {
     setTopic(existingSession.topic || '');
     if (existingSession.startTime) setStartTime(existingSession.startTime);
     if (existingSession.endTime) setEndTime(existingSession.endTime);
+    if (existingSession.timetableEntry) {
+      const ttId = existingSession.timetableEntry._id || existingSession.timetableEntry;
+      setSelectedTimetableEntryId(ttId);
+    }
 
     const map = {};
     if (Array.isArray(existingSession.records)) {
@@ -245,6 +322,7 @@ export const FacultyAttendancePage = () => {
       const payload = {
         subject: currentItem.subject._id,
         classDivision: currentItem.classDivision._id,
+        timetableEntry: selectedTimetableEntryId || undefined,
         date: lectureDate,
         startTime,
         endTime,
@@ -456,11 +534,43 @@ export const FacultyAttendancePage = () => {
                       fullWidth
                       label="Lecture Date"
                       value={lectureDate}
-                      onChange={(e) => setLectureDate(e.target.value)}
+                      onChange={(e) => handleDateChange(e.target.value)}
                       size="small"
                       InputLabelProps={{ shrink: true }}
                     />
                   </Grid>
+
+                  {/* Scheduled slots for this specific date */}
+                  {currentItem && getSlotsForDate(currentItem, lectureDate).length > 0 && (
+                    <Grid item xs={12}>
+                      <Box sx={{ p: 1.5, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <Typography variant="caption" sx={{ fontWeight: 700, color: '#475569' }}>
+                            Timetable Slot ({new Date(lectureDate + 'T00:00:00Z').toLocaleDateString(undefined, { weekday: 'long' })}):
+                          </Typography>
+                          {getSlotsForDate(currentItem, lectureDate).map((slot, sIdx) => {
+                            const isSelected = startTime === slot.startTime && endTime === slot.endTime;
+                            return (
+                              <Chip
+                                key={sIdx}
+                                label={`${slot.startTime} - ${slot.endTime} (${slot.room || slot.activityType || 'Class'})`}
+                                size="small"
+                                clickable
+                                color={isSelected ? 'primary' : 'default'}
+                                variant={isSelected ? 'filled' : 'outlined'}
+                                onClick={() => {
+                                  setStartTime(slot.startTime);
+                                  setEndTime(slot.endTime);
+                                  setSelectedTimetableEntryId(slot.timetableEntryId || null);
+                                }}
+                                sx={{ fontWeight: 700 }}
+                              />
+                            );
+                          })}
+                        </Stack>
+                      </Box>
+                    </Grid>
+                  )}
 
                   <Grid item xs={6} sm={3}>
                     <TextField

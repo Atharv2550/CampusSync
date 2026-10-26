@@ -180,7 +180,7 @@ export const VolunteeringRecordsPage = () => {
           >
             <CampusIcon sx={{ fontSize: 54, color: '#0f172a', mb: 1 }} />
             <Typography variant="h6" sx={{ letterSpacing: '0.2em', fontWeight: 800, color: '#64748b', mb: 1 }}>
-              CAMPUSSPHERE CIVIC LEADERSHIP
+              CAMPUSSYNC CIVIC LEADERSHIP
             </Typography>
             <Typography variant="h3" sx={{ fontWeight: 900, color: '#0f172a', mb: 2, fontFamily: 'serif' }}>
               Certificate of Community Service

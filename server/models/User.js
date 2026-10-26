@@ -74,7 +74,7 @@ const userSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['active', 'suspended', 'pending'],
+      enum: ['active', 'suspended', 'pending', 'inactive'],
       default: 'active',
       index: true,
     },
@@ -83,6 +83,18 @@ const userSchema = new mongoose.Schema(
       ref: 'Club',
       default: null,
     },
+    assignedClubs: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Club',
+      },
+    ],
+    assignedResources: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'CampusResource',
+      },
+    ],
     resetPasswordToken: {
       type: String,
       select: false,

@@ -11,8 +11,15 @@ import {
   Alert,
   Stack,
   CircularProgress,
+  IconButton,
+  InputAdornment,
 } from '@mui/material';
-import { Lightbulb as LogoIcon, LockOutlined as LockIcon } from '@mui/icons-material';
+import {
+  LockOutlined as LockIcon,
+  Visibility,
+  VisibilityOff,
+  Lightbulb as LogoIcon,
+} from '@mui/icons-material';
 
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -25,10 +32,27 @@ export const LoginPage = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const sessionExpired = new URLSearchParams(location.search).get('sessionExpired');
+
+  const getDashboardRouteForRole = (role) => {
+    switch (role) {
+      case 'admin':
+        return '/admin';
+      case 'faculty':
+        return '/dashboard';
+      case 'coordinator':
+        return '/coordinator/dashboard';
+      case 'resource_manager':
+        return '/resource-manager/dashboard';
+      case 'student':
+      default:
+        return '/dashboard';
+    }
+  };
 
   const handleSubmit = async (e) => {
     e?.preventDefault();
@@ -41,9 +65,9 @@ export const LoginPage = () => {
     setErrorMessage('');
 
     try {
-      await login(email, password);
-      showSuccess('Welcome back to CampusSphere!');
-      navigate('/dashboard');
+      const authenticatedUser = await login(email, password);
+      showSuccess('Welcome back to CampusSync!');
+      navigate(getDashboardRouteForRole(authenticatedUser?.role));
     } catch (err) {
       const msg = err.response?.data?.message || 'Login failed. Please check your credentials.';
       setErrorMessage(msg);
@@ -59,9 +83,9 @@ export const LoginPage = () => {
     setErrorMessage('');
     setLoading(true);
     try {
-      await login(demoEmail, demoPassword);
+      const authenticatedUser = await login(demoEmail, demoPassword);
       showSuccess('Logged in successfully!');
-      navigate('/dashboard');
+      navigate(getDashboardRouteForRole(authenticatedUser?.role));
     } catch (err) {
       const msg = err.response?.data?.message || 'Login failed.';
       setErrorMessage(msg);
@@ -100,8 +124,8 @@ export const LoginPage = () => {
           <Typography variant="h4" sx={{ fontWeight: 800, color: '#0f172a' }}>
             Welcome Back
           </Typography>
-          <Typography variant="body2" sx={{ color: '#64748b' }}>
-            Log in to access your personalized CampusSphere dashboard
+          <Typography variant="body2" sx={{ color: '#64748b', mt: 0.5 }}>
+            Log in to access your personalized CampusSync dashboard
           </Typography>
         </Box>
 
@@ -123,13 +147,13 @@ export const LoginPage = () => {
             required
             fullWidth
             id="email"
-            label="College Email Address"
+            label="Official College Email Address"
             name="email"
             autoComplete="email"
             autoFocus
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="student@campussphere.edu"
+            placeholder="name@campussync.edu"
           />
           <TextField
             margin="normal"
@@ -137,11 +161,25 @@ export const LoginPage = () => {
             fullWidth
             name="password"
             label="Password"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             id="password"
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    aria-label="toggle password visibility"
+                    onClick={() => setShowPassword(!showPassword)}
+                    edge="end"
+                    size="small"
+                  >
+                    {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+            }}
           />
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1, mb: 2 }}>
@@ -164,7 +202,7 @@ export const LoginPage = () => {
 
           <Box sx={{ mt: 3, textAlign: 'center' }}>
             <Typography variant="body2" sx={{ color: '#64748b' }}>
-              New to CampusSphere?{' '}
+              New to CampusSync?{' '}
               <RouterLink to="/register" style={{ color: '#2563eb', fontWeight: 700 }}>
                 Create a student account
               </RouterLink>
@@ -174,16 +212,16 @@ export const LoginPage = () => {
 
         <Divider sx={{ my: 3 }}>
           <Typography variant="caption" sx={{ color: '#94a3b8', fontWeight: 700 }}>
-            QUICK 1-CLICK DEMO ACCOUNTS
+            QUICK 1-CLICK DEMO ACCOUNTS (ALL 5 ROLES)
           </Typography>
         </Divider>
 
-        {/* Demo Fast Fill Buttons */}
+        {/* Demo Fast Fill Buttons for All 5 Roles */}
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap justifyContent="center">
           <Button
             size="small"
             variant="outlined"
-            onClick={() => handleDemoFill('student@campussphere.edu', 'Student@123')}
+            onClick={() => handleDemoFill('student@campussync.edu', 'Student@123')}
             sx={{ borderRadius: 2 }}
           >
             Student
@@ -191,17 +229,8 @@ export const LoginPage = () => {
           <Button
             size="small"
             variant="outlined"
-            color="error"
-            onClick={() => handleDemoFill('admin@campussphere.edu', 'Admin@123')}
-            sx={{ borderRadius: 2 }}
-          >
-            Admin
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
             color="secondary"
-            onClick={() => handleDemoFill('faculty@campussphere.edu', 'Faculty@123')}
+            onClick={() => handleDemoFill('faculty@campussync.edu', 'Faculty@123')}
             sx={{ borderRadius: 2 }}
           >
             Faculty
@@ -210,22 +239,33 @@ export const LoginPage = () => {
             size="small"
             variant="outlined"
             color="warning"
-            onClick={() => handleDemoFill('coordinator@campussphere.edu', 'Coordinator@123')}
+            onClick={() => handleDemoFill('coordinator@campussync.edu', 'Coordinator@123')}
             sx={{ borderRadius: 2 }}
           >
-            Coordinator
+            Club Coordinator
           </Button>
           <Button
             size="small"
             variant="outlined"
             color="info"
-            onClick={() => handleDemoFill('resourcemanager@campussphere.edu', 'Manager@123')}
+            onClick={() => handleDemoFill('resourcemanager@campussync.edu', 'Manager@123')}
             sx={{ borderRadius: 2 }}
           >
-            Manager
+            Resource Manager
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            onClick={() => handleDemoFill('admin@campussync.edu', 'Admin@123')}
+            sx={{ borderRadius: 2 }}
+          >
+            Admin
           </Button>
         </Stack>
       </Paper>
     </Container>
   );
 };
+
+export default LoginPage;

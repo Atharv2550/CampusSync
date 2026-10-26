@@ -1,5 +1,8 @@
 import { verifyToken } from '../utils/jwt.js';
 import { User } from '../models/User.js';
+import { Department } from '../models/Department.js';
+import { Club } from '../models/Club.js';
+import { CampusResource } from '../models/CampusResource.js';
 
 export const protect = async (req, res, next) => {
   let token;
@@ -17,7 +20,11 @@ export const protect = async (req, res, next) => {
 
   try {
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.id).populate('department');
+    const user = await User.findById(decoded.id)
+      .populate('department')
+      .populate('assignedClub')
+      .populate('assignedClubs')
+      .populate('assignedResources');
 
     if (!user) {
       return res.status(401).json({
@@ -30,6 +37,20 @@ export const protect = async (req, res, next) => {
       return res.status(403).json({
         success: false,
         message: 'Your account has been suspended by campus administration. Please contact support.',
+      });
+    }
+
+    if (user.status === 'inactive') {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated by campus administration. Please contact support.',
+      });
+    }
+
+    if (user.status === 'pending') {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is pending administrator activation. Please contact support.',
       });
     }
 

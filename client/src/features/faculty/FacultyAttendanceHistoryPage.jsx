@@ -1270,7 +1270,7 @@ export const FacultyAttendanceHistoryPage = () => {
                             variant="contained"
                             size="small"
                             component={Link}
-                            to="/faculty/attendance"
+                            to={`/faculty/attendance?subject=${m.subject?._id}&classDivision=${m.classDivision?._id}&date=${m.dateStr || new Date(m.date).toISOString().split('T')[0]}&startTime=${encodeURIComponent(m.startTime)}&endTime=${encodeURIComponent(m.endTime)}&timetableEntry=${m.timetableEntryId || ''}`}
                             sx={{
                               textTransform: 'none',
                               fontWeight: 700,

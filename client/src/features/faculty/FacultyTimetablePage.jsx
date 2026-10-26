@@ -493,8 +493,9 @@ export const FacultyTimetablePage = () => {
               <Button
                 variant="contained"
                 onClick={() => {
+                  const entry = selectedEntry;
                   setSelectedEntry(null);
-                  window.location.href = '/faculty/attendance';
+                  window.location.href = `/faculty/attendance?subject=${entry?.subject?._id || ''}&classDivision=${entry?.classDivision?._id || ''}&startTime=${encodeURIComponent(entry?.startTime || '')}&endTime=${encodeURIComponent(entry?.endTime || '')}&timetableEntry=${entry?._id || ''}`;
                 }}
                 sx={{ bgcolor: '#0f172a', textTransform: 'none', fontWeight: 700 }}
               >

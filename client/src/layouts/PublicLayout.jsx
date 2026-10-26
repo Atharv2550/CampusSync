@@ -52,7 +52,7 @@ export const PublicLayout = () => {
                 <LogoIcon fontSize="small" />
               </Box>
               <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                CampusSphere
+                CampusSync
               </Typography>
             </Box>
 
@@ -113,14 +113,14 @@ export const PublicLayout = () => {
                   <LogoIcon fontSize="small" />
                 </Box>
                 <Typography variant="h6" sx={{ color: '#ffffff', fontWeight: 800 }}>
-                  CampusSphere
+                  CampusSync
                 </Typography>
               </Box>
               <Typography variant="body2" sx={{ maxWidth: 360, mb: 2 }}>
-                One Campus. One Community. Endless Possibilities. The unified digital ecosystem for students, faculty, clubs, and campus administrators.
+                One Campus. Everything in Sync. The smart campus management and community platform for students, faculty, club coordinators, resource managers, and administrators.
               </Typography>
               <Typography variant="caption" sx={{ color: '#64748b' }}>
-                &copy; {new Date().getFullYear()} CampusSphere Inc. All rights reserved.
+                &copy; {new Date().getFullYear()} CampusSync. All rights reserved.
               </Typography>
             </Box>
 

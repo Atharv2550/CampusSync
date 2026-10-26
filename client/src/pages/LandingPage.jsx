@@ -39,9 +39,12 @@ export const LandingPage = () => {
 
   const handleQuickDemo = async (email, password, roleLabel) => {
     try {
-      await login(email, password);
+      const loggedInUser = await login(email, password);
       showSuccess(`Logged in as ${roleLabel}! Redirecting to dashboard...`);
-      navigate('/dashboard');
+      if (loggedInUser?.role === 'admin') navigate('/admin');
+      else if (loggedInUser?.role === 'coordinator') navigate('/coordinator/dashboard');
+      else if (loggedInUser?.role === 'resource_manager') navigate('/resource-manager/dashboard');
+      else navigate('/dashboard');
     } catch (err) {
       showError(err.response?.data?.message || 'Failed to login with demo credentials.');
     }
@@ -99,11 +102,11 @@ export const LandingPage = () => {
   ];
 
   const demoAccounts = [
-    { role: 'Student', email: 'student@campussphere.edu', pass: 'Student@123', color: '#2563eb', desc: 'Browse events, list items, book resources, request tutoring.' },
-    { role: 'Campus Admin', email: 'admin@campussphere.edu', pass: 'Admin@123', color: '#dc2626', desc: 'Moderate content, manage user accounts, inspect audit logs & analytics.' },
-    { role: 'Faculty', email: 'faculty@campussphere.edu', pass: 'Faculty@123', color: '#7c3aed', desc: 'Publish announcements, supervise events & verify volunteer hours.' },
-    { role: 'Club Coordinator', email: 'coordinator@campussphere.edu', pass: 'Coordinator@123', color: '#d97706', desc: 'Manage club roster, review applications & assign committee roles.' },
-    { role: 'Resource Manager', email: 'resourcemanager@campussphere.edu', pass: 'Manager@123', color: '#0284c7', desc: 'Approve room/equipment bookings & prevent scheduling conflicts.' },
+    { role: 'Student', email: 'student@campussync.edu', pass: 'Student@123', color: '#2563eb', desc: 'Browse events, list items, book resources, request tutoring.' },
+    { role: 'Campus Admin', email: 'admin@campussync.edu', pass: 'Admin@123', color: '#dc2626', desc: 'Moderate content, manage user accounts, inspect audit logs & analytics.' },
+    { role: 'Faculty', email: 'faculty@campussync.edu', pass: 'Faculty@123', color: '#7c3aed', desc: 'Publish announcements, supervise events & verify volunteer hours.' },
+    { role: 'Club Coordinator', email: 'coordinator@campussync.edu', pass: 'Coordinator@123', color: '#d97706', desc: 'Manage club roster, review applications & assign committee roles.' },
+    { role: 'Resource Manager', email: 'resourcemanager@campussync.edu', pass: 'Manager@123', color: '#0284c7', desc: 'Approve room/equipment bookings & prevent scheduling conflicts.' },
   ];
 
   return (
@@ -156,7 +159,7 @@ export const LandingPage = () => {
                   mb: 4,
                 }}
               >
-                One Campus. One Community. Endless Possibilities. The centralized platform uniting events, lost-and-found, marketplace, tutoring, clubs, and facility booking into one seamless experience.
+                One Campus. Everything in Sync. The centralized platform uniting events, timetables, attendance, lost-and-found, marketplace, tutoring, clubs, and facility booking into one seamless experience.
               </Typography>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <Button
@@ -220,7 +223,7 @@ export const LandingPage = () => {
                   </Typography>
                 </Box>
                 <Typography variant="body2" sx={{ color: '#64748b', mb: 2.5 }}>
-                  Select any persona to immediately explore CampusSphere with live database records:
+                  Select any persona to immediately explore CampusSync with live database records:
                 </Typography>
 
                 <Stack spacing={1.5}>
@@ -320,7 +323,7 @@ export const LandingPage = () => {
         <Container maxWidth="lg">
           <Box sx={{ textAlign: 'center', mb: 8 }}>
             <Typography variant="h3" sx={{ fontWeight: 800, mb: 2 }}>
-              How CampusSphere Works
+              How CampusSync Works
             </Typography>
             <Typography variant="body1" sx={{ color: '#64748b', maxWidth: 600, mx: 'auto' }}>
               A frictionless workflow designed to save time and build community connection.

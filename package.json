@@ -1,7 +1,7 @@
 {
-  "name": "campussphere",
+  "name": "campussync",
   "version": "1.0.0",
-  "description": "CampusSphere — Smart Campus Community & Collaboration Platform",
+  "description": "CampusSync — Smart Campus Management & Community Platform",
   "private": true,
   "scripts": {
     "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,green\" \"npm run dev:server\" \"npm run dev:client\"",
@@ -11,6 +11,8 @@
     "build": "npm --prefix client run build",
     "seed": "npm --prefix server run seed",
     "test": "npm --prefix server test",
+    "test:client": "npm --prefix client test -- --run",
+    "test:all": "npm run test && npm run test:client",
     "install:all": "npm install && npm --prefix server install && npm --prefix client install"
   },
   "devDependencies": {
@@ -19,12 +21,13 @@
   "keywords": [
     "campus",
     "community",
+    "management",
     "collaboration",
     "mern",
     "react",
     "express",
     "mongodb"
   ],
-  "author": "CampusSphere Team",
+  "author": "CampusSync Team",
   "license": "MIT"
 }

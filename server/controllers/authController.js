@@ -1,4 +1,7 @@
 import { User } from '../models/User.js';
+import { Department } from '../models/Department.js';
+import { Club } from '../models/Club.js';
+import { CampusResource } from '../models/CampusResource.js';
 import { generateToken } from '../utils/jwt.js';
 import { logAuditEvent } from '../utils/auditLogger.js';
 
@@ -73,7 +76,7 @@ export const register = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful! Welcome to CampusSphere.',
+      message: 'Registration successful! Welcome to CampusSync.',
       data: {
         token,
         user: {
@@ -81,6 +84,7 @@ export const register = async (req, res, next) => {
           fullName: populatedUser.fullName,
           email: populatedUser.email,
           role: populatedUser.role,
+          status: populatedUser.status,
           department: populatedUser.department,
           academicYear: populatedUser.academicYear,
           avatar: populatedUser.avatar,
@@ -103,10 +107,21 @@ export const login = async (req, res, next) => {
       });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase().trim() })
+    const cleanEmail = email.toLowerCase().trim();
+    const [localPart, domainPart] = cleanEmail.split('@');
+    const candidateEmails = [cleanEmail];
+    if (domainPart === 'campussync.edu') {
+      candidateEmails.push(`${localPart}@campussphere.edu`);
+    } else if (domainPart === 'campussphere.edu') {
+      candidateEmails.push(`${localPart}@campussync.edu`);
+    }
+
+    const user = await User.findOne({ email: { $in: candidateEmails } })
       .select('+password')
       .populate('department')
-      .populate('assignedClub');
+      .populate('assignedClub')
+      .populate('assignedClubs')
+      .populate('assignedResources');
 
     if (!user) {
       return res.status(401).json({
@@ -118,7 +133,21 @@ export const login = async (req, res, next) => {
     if (user.status === 'suspended') {
       return res.status(403).json({
         success: false,
-        message: 'Your account has been suspended. Please contact campus administration.',
+        message: 'Your account has been suspended by campus administration. Please contact support.',
+      });
+    }
+
+    if (user.status === 'inactive') {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account has been deactivated. Please contact campus administration.',
+      });
+    }
+
+    if (user.status === 'pending') {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is pending administrator activation. Please contact support.',
       });
     }
 
@@ -137,7 +166,7 @@ export const login = async (req, res, next) => {
       action: 'USER_LOGIN',
       targetType: 'User',
       targetId: user._id,
-      details: { email: user.email },
+      details: { email: user.email, role: user.role },
       req,
     });
 
@@ -151,10 +180,16 @@ export const login = async (req, res, next) => {
           fullName: user.fullName,
           email: user.email,
           role: user.role,
+          status: user.status,
           department: user.department,
           academicYear: user.academicYear,
           avatar: user.avatar,
           assignedClub: user.assignedClub,
+          assignedClubs: user.assignedClubs,
+          assignedResources: user.assignedResources,
+          designation: user.designation,
+          employeeId: user.employeeId,
+          studentId: user.studentId,
           interests: user.interests,
         },
       },
@@ -168,7 +203,9 @@ export const getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id)
       .populate('department')
-      .populate('assignedClub');
+      .populate('assignedClub')
+      .populate('assignedClubs')
+      .populate('assignedResources');
 
     res.status(200).json({
       success: true,

@@ -52,6 +52,7 @@ export const getMyAssignedSubjects = async (req, res, next) => {
           activityTypes: new Set([entry.activityType]),
           scheduleSlots: [
             {
+              timetableEntryId: entry._id,
               dayOfWeek: entry.dayOfWeek,
               startTime: entry.startTime,
               endTime: entry.endTime,
@@ -66,6 +67,7 @@ export const getMyAssignedSubjects = async (req, res, next) => {
         item.weeklySessions += 1;
         item.activityTypes.add(entry.activityType);
         item.scheduleSlots.push({
+          timetableEntryId: entry._id,
           dayOfWeek: entry.dayOfWeek,
           startTime: entry.startTime,
           endTime: entry.endTime,

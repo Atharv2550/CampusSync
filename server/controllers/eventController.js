@@ -131,6 +131,19 @@ export const createEvent = async (req, res, next) => {
       });
     }
 
+    if (req.user.role === 'coordinator') {
+      const singleAssigned = (req.user.assignedClub?._id || req.user.assignedClub)?.toString();
+      const multiAssigned = (req.user.assignedClubs || []).map((c) => (c._id || c).toString());
+      const targetClub = club ? club.toString() : singleAssigned;
+
+      if (!targetClub || (targetClub !== singleAssigned && !multiAssigned.includes(targetClub))) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied: Club coordinators can only create events for their assigned club.',
+        });
+      }
+    }
+
     const event = await Event.create({
       title,
       description,

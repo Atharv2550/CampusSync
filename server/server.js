@@ -13,6 +13,7 @@ import { connectDB } from './config/db.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 import { initNotificationSocket } from './services/notificationService.js';
 import { verifyToken } from './utils/jwt.js';
+import { runAttendanceMigration } from './scripts/migrateAttendanceStatus.js';
 
 // Route imports
 import authRoutes from './routes/authRoutes.js';
@@ -116,9 +117,11 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
-    platform: 'CampusSphere API',
+    platform: 'CampusSync API',
+    tagline: 'One Campus. Everything in Sync.',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
   });
 });
 
@@ -145,16 +148,37 @@ app.use('/api/duties', dutyRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/faculty', facultySupervisionRoutes);
 
+// Optional SPA Production static serve & nested route fallback
+const clientDistPath = path.resolve(__dirname, '../client/dist');
+import fs from 'fs';
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.url.startsWith('/api') || req.url.startsWith('/uploads')) {
+      return next();
+    }
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
+
 // Error Handling
 app.use(notFound);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
+const validateEnvironment = () => {
+  if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+    console.warn('[CampusSync Security Warning]: JWT_SECRET is not configured for production!');
+  }
+};
+
 if (process.env.NODE_ENV !== 'test') {
+  validateEnvironment();
   connectDB().then(() => {
+    runAttendanceMigration().catch((err) => console.error('[Startup Migration Error]:', err));
     server.listen(PORT, () => {
-      console.log(`[CampusSphere Server] Running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);
+      console.log(`[CampusSync Server] Running in ${process.env.NODE_ENV || 'development'} mode on http://localhost:${PORT}`);
     });
   });
 }

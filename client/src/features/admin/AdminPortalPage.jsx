@@ -28,6 +28,9 @@ import {
   IconButton,
   Tooltip,
   Avatar,
+  FormControl,
+  InputLabel,
+  Select,
 } from '@mui/material';
 import {
   AdminPanelSettings as AdminIcon,
@@ -55,7 +58,7 @@ import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
 import { AdminTimetableManagement } from './AdminTimetableManagement';
 
-const DESIGNATIONS = [
+const FACULTY_DESIGNATIONS = [
   'Professor',
   'Associate Professor',
   'Assistant Professor',
@@ -67,12 +70,31 @@ const DESIGNATIONS = [
   'Dean / Director',
 ];
 
+const COORDINATOR_DESIGNATIONS = [
+  'Club Coordinator',
+  'Faculty Advisor',
+  'Lead Coordinator',
+  'Student President',
+  'Technical Head',
+  'Activities Secretary',
+];
+
+const RESOURCE_MANAGER_DESIGNATIONS = [
+  'Campus Resource Manager',
+  'Facility Incharge',
+  'Lab Superintendent',
+  'Audiovisual Officer',
+  'Campus Operations Manager',
+];
+
 export const AdminPortalPage = () => {
   const { showSuccess, showError } = useToast();
 
   const [tab, setTab] = useState(0); // 0 = Users, 1 = Moderation, 2 = Audit Logs, 3 = Settings, 4 = Timetables & Duties
   const [users, setUsers] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [clubsList, setClubsList] = useState([]);
+  const [resourcesList, setResourcesList] = useState([]);
   const [flagged, setFlagged] = useState({ flaggedListings: [], flaggedLostFound: [] });
   const [auditLogs, setAuditLogs] = useState([]);
   const [settings, setSettings] = useState([]);
@@ -84,11 +106,12 @@ export const AdminPortalPage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [departmentFilter, setDepartmentFilter] = useState('all');
 
-  // Add Faculty Modal State
+  // Add Staff Modal State
   const [openAddFacultyModal, setOpenAddFacultyModal] = useState(false);
   const [savingFaculty, setSavingFaculty] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [facultyForm, setFacultyForm] = useState({
+    role: 'faculty',
     fullName: '',
     email: '',
     employeeId: '',
@@ -97,14 +120,17 @@ export const AdminPortalPage = () => {
     phoneNumber: '',
     status: 'active',
     password: '',
+    assignedClubs: [],
+    assignedResources: [],
   });
 
-  // Edit Faculty Modal State
+  // Edit Staff Modal State
   const [openEditFacultyModal, setOpenEditFacultyModal] = useState(false);
   const [savingEditFaculty, setSavingEditFaculty] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [editFacultyForm, setEditFacultyForm] = useState({
     _id: '',
+    role: 'faculty',
     fullName: '',
     email: '',
     employeeId: '',
@@ -113,13 +139,9 @@ export const AdminPortalPage = () => {
     phoneNumber: '',
     status: 'active',
     password: '',
+    assignedClubs: [],
+    assignedResources: [],
   });
-
-  // General User Role/Status Edit Dialog (for students / coordinators)
-  const [openUserModal, setOpenUserModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [editRole, setEditRole] = useState('student');
-  const [editStatus, setEditStatus] = useState('active');
 
   // Timetable Handoff State
   const [selectedFacultyForTimetable, setSelectedFacultyForTimetable] = useState(null);
@@ -168,8 +190,20 @@ export const AdminPortalPage = () => {
     } catch (_) {}
   };
 
+  const fetchClubsAndResources = async () => {
+    try {
+      const [cRes, rRes] = await Promise.all([
+        api.get('/clubs?limit=100'),
+        api.get('/resources'),
+      ]);
+      setClubsList(cRes.data.data || []);
+      setResourcesList(rRes.data.data || []);
+    } catch (_) {}
+  };
+
   useEffect(() => {
     fetchDepartments();
+    fetchClubsAndResources();
   }, []);
 
   useEffect(() => {
@@ -200,28 +234,31 @@ export const AdminPortalPage = () => {
     setShowEditPassword(true);
   };
 
-  // Open Add Faculty Dialog
-  const handleOpenAddFaculty = () => {
+  // Open Add Staff Dialog
+  const handleOpenAddFaculty = (defaultRole = 'faculty') => {
     setFacultyForm({
+      role: defaultRole,
       fullName: '',
       email: '',
       employeeId: '',
       department: departments[0]?._id || '',
-      designation: 'Assistant Professor',
+      designation: defaultRole === 'faculty' ? 'Assistant Professor' : defaultRole === 'coordinator' ? 'Lead Coordinator' : 'Campus Resource Manager',
       phoneNumber: '',
       status: 'active',
       password: '',
+      assignedClubs: [],
+      assignedResources: [],
     });
     setShowPassword(false);
     setOpenAddFacultyModal(true);
   };
 
-  // Submit Add Faculty
+  // Submit Add Staff
   const handleCreateFaculty = async (e) => {
     e.preventDefault();
 
-    if (!facultyForm.fullName.trim() || !facultyForm.email.trim() || !facultyForm.employeeId.trim() || !facultyForm.password) {
-      showError('Full name, official email, employee ID, and initial password are required.');
+    if (!facultyForm.fullName.trim() || !facultyForm.email.trim() || !facultyForm.password) {
+      showError('Full name, official email, and initial password are required.');
       return;
     }
 
@@ -232,47 +269,58 @@ export const AdminPortalPage = () => {
 
     try {
       setSavingFaculty(true);
-      const res = await api.post('/admin/faculty', facultyForm);
-      showSuccess(res.data.message || 'Faculty account created successfully!');
+      const res = await api.post('/admin/staff', facultyForm);
+      showSuccess(res.data.message || 'Staff account created successfully!');
       setOpenAddFacultyModal(false);
       fetchUsers();
     } catch (err) {
-      showError(err.response?.data?.message || 'Failed to create faculty account.');
+      showError(err.response?.data?.message || 'Failed to create staff account.');
     } finally {
       setSavingFaculty(false);
     }
   };
 
-  // Open Edit Faculty Dialog
+  // Open Edit Staff Dialog
   const handleOpenFacultyEdit = (user) => {
+    const userClubIds = (user.assignedClubs || []).map((c) => (c._id || c).toString());
+    if (user.assignedClub) {
+      const singleId = (user.assignedClub._id || user.assignedClub).toString();
+      if (!userClubIds.includes(singleId)) userClubIds.push(singleId);
+    }
+
+    const userResourceIds = (user.assignedResources || []).map((r) => (r._id || r).toString());
+
     setEditFacultyForm({
       _id: user._id,
+      role: user.role || 'faculty',
       fullName: user.fullName || '',
       email: user.email || '',
-      employeeId: user.employeeId || '',
+      employeeId: user.employeeId || user.studentId || '',
       department: user.department?._id || user.department || '',
-      designation: user.designation || 'Assistant Professor',
+      designation: user.designation || (user.role === 'faculty' ? 'Assistant Professor' : user.role === 'coordinator' ? 'Lead Coordinator' : user.role === 'resource_manager' ? 'Campus Resource Manager' : ''),
       phoneNumber: user.phoneNumber || '',
       status: user.status || 'active',
       password: '',
+      assignedClubs: userClubIds,
+      assignedResources: userResourceIds,
     });
     setShowEditPassword(false);
     setOpenEditFacultyModal(true);
   };
 
-  // Submit Edit Faculty
+  // Submit Edit Staff
   const handleUpdateFaculty = async (e) => {
     e.preventDefault();
     try {
       setSavingEditFaculty(true);
       const payload = { ...editFacultyForm };
       if (!payload.password) delete payload.password; // Don't overwrite if left blank
-      const res = await api.put(`/admin/faculty/${editFacultyForm._id}`, payload);
-      showSuccess(res.data.message || 'Faculty profile updated successfully!');
+      const res = await api.put(`/admin/staff/${editFacultyForm._id}`, payload);
+      showSuccess(res.data.message || 'Account updated successfully!');
       setOpenEditFacultyModal(false);
       fetchUsers();
     } catch (err) {
-      showError(err.response?.data?.message || 'Failed to update faculty profile.');
+      showError(err.response?.data?.message || 'Failed to update account.');
     } finally {
       setSavingEditFaculty(false);
     }
@@ -405,7 +453,7 @@ export const AdminPortalPage = () => {
         <Button
           variant="contained"
           startIcon={<PersonAddIcon />}
-          onClick={handleOpenAddFaculty}
+          onClick={() => handleOpenAddFaculty('faculty')}
           sx={{
             bgcolor: '#2563eb',
             '&:hover': { bgcolor: '#1d4ed8' },
@@ -417,7 +465,7 @@ export const AdminPortalPage = () => {
             boxShadow: '0 4px 12px rgba(37,99,235,0.25)',
           }}
         >
-          Add Faculty Account
+          Provision Staff Account
         </Button>
       </Box>
 
@@ -443,21 +491,21 @@ export const AdminPortalPage = () => {
       {/* Tab 0: User Accounts Directory */}
       {tab === 0 && (
         <Paper sx={{ p: 3, borderRadius: 3, border: '1px solid #e2e8f0', bgcolor: '#ffffff' }}>
-          {/* Section Header & Add Faculty Button */}
+          {/* Section Header & Add Staff Button */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5, flexWrap: 'wrap', gap: 2 }}>
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 800, color: '#0f172a' }}>
-                Campus User Accounts Directory & Faculty Management
+                CampusSync User Accounts Directory & Role Governance
               </Typography>
               <Typography variant="body2" sx={{ color: '#64748b' }}>
-                Search, filter, edit credentials, deactivate accounts, and coordinate faculty teaching allocations
+                Search, filter, edit credentials, deactivate accounts, and manage role permissions across campus
               </Typography>
             </Box>
 
             <Button
               variant="contained"
               startIcon={<PersonAddIcon />}
-              onClick={handleOpenAddFaculty}
+              onClick={() => handleOpenAddFaculty('faculty')}
               sx={{
                 bgcolor: '#0f172a',
                 '&:hover': { bgcolor: '#1e293b' },
@@ -467,7 +515,7 @@ export const AdminPortalPage = () => {
                 px: 2,
               }}
             >
-              + Add Faculty Member
+              + Provision Staff Account
             </Button>
           </Box>
 
@@ -682,7 +730,7 @@ export const AdminPortalPage = () => {
                           </Box>
                         </TableCell>
 
-                        {/* Role & ID */}
+                        {/* Role & ID & Assignments */}
                         <TableCell>
                           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-start' }}>
                             <Chip
@@ -695,12 +743,14 @@ export const AdminPortalPage = () => {
                                   ? 'secondary'
                                   : u.role === 'coordinator'
                                   ? 'warning'
+                                  : u.role === 'resource_manager'
+                                  ? 'info'
                                   : 'default'
                               }
                               sx={{ fontWeight: 700, height: 22, fontSize: '0.72rem' }}
                             />
-                            {isFaculty && (u.employeeId || u.studentId) && (
-                              <Tooltip title="Official Faculty Employee ID">
+                            {(u.employeeId || u.studentId) && (
+                              <Tooltip title="Institutional Identifier">
                                 <Chip
                                   icon={<BadgeIcon sx={{ fontSize: '13px !important' }} />}
                                   label={u.employeeId || u.studentId}
@@ -715,10 +765,33 @@ export const AdminPortalPage = () => {
                                 />
                               </Tooltip>
                             )}
-                            {!isFaculty && u.studentId && (
-                              <Typography variant="caption" sx={{ color: '#64748b', fontWeight: 600 }}>
-                                ID: {u.studentId}
-                              </Typography>
+
+                            {/* Club Coordinator Assigned Clubs */}
+                            {u.role === 'coordinator' && (
+                              <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5, maxWidth: 220 }}>
+                                {(u.assignedClubs?.length > 0 ? u.assignedClubs : u.assignedClub ? [u.assignedClub] : []).map((c) => (
+                                  <Chip
+                                    key={c._id || c}
+                                    label={c.name || c.code || 'Club'}
+                                    size="small"
+                                    sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#fef3c7', color: '#92400e', fontWeight: 600 }}
+                                  />
+                                ))}
+                              </Box>
+                            )}
+
+                            {/* Resource Manager Assigned Facilities */}
+                            {u.role === 'resource_manager' && u.assignedResources?.length > 0 && (
+                              <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5, maxWidth: 220 }}>
+                                {u.assignedResources.map((r) => (
+                                  <Chip
+                                    key={r._id || r}
+                                    label={r.name || 'Resource'}
+                                    size="small"
+                                    sx={{ height: 18, fontSize: '0.65rem', bgcolor: '#f0f9ff', color: '#0369a1', fontWeight: 600 }}
+                                  />
+                                ))}
+                              </Box>
                             )}
                           </Box>
                         </TableCell>
@@ -748,44 +821,34 @@ export const AdminPortalPage = () => {
                         {/* Actions */}
                         <TableCell align="right">
                           <Stack direction="row" spacing={1} justifyContent="flex-end" alignItems="center">
-                            {isFaculty ? (
-                              <>
-                                <Button
-                                  size="small"
-                                  variant="contained"
-                                  color="primary"
-                                  startIcon={<CalendarIcon sx={{ fontSize: 16 }} />}
-                                  onClick={() => handleAssignTimetable(u)}
-                                  sx={{
-                                    textTransform: 'none',
-                                    fontWeight: 700,
-                                    fontSize: '0.75rem',
-                                    bgcolor: '#2563eb',
-                                    py: 0.5,
-                                  }}
-                                >
-                                  Assign Timetable
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  startIcon={<EditIcon sx={{ fontSize: 15 }} />}
-                                  onClick={() => handleOpenFacultyEdit(u)}
-                                  sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.75rem', py: 0.5 }}
-                                >
-                                  Edit Faculty
-                                </Button>
-                              </>
-                            ) : (
+                            {isFaculty && (
                               <Button
                                 size="small"
-                                variant="outlined"
-                                onClick={() => handleOpenUserEdit(u)}
-                                sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.75rem', py: 0.5 }}
+                                variant="contained"
+                                color="primary"
+                                startIcon={<CalendarIcon sx={{ fontSize: 16 }} />}
+                                onClick={() => handleAssignTimetable(u)}
+                                sx={{
+                                  textTransform: 'none',
+                                  fontWeight: 700,
+                                  fontSize: '0.75rem',
+                                  bgcolor: '#2563eb',
+                                  py: 0.5,
+                                }}
                               >
-                                Manage Role
+                                Timetable
                               </Button>
                             )}
+
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<EditIcon sx={{ fontSize: 15 }} />}
+                              onClick={() => handleOpenFacultyEdit(u)}
+                              sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.75rem', py: 0.5 }}
+                            >
+                              Edit Account
+                            </Button>
 
                             <Tooltip title={u.status === 'active' ? 'Suspend Account' : 'Activate Account'}>
                               <IconButton
@@ -936,7 +999,7 @@ export const AdminPortalPage = () => {
         />
       )}
 
-      {/* Modal: Add Faculty Member */}
+      {/* Modal: Add Staff Member */}
       <Dialog
         open={openAddFacultyModal}
         onClose={() => !savingFaculty && setOpenAddFacultyModal(false)}
@@ -944,22 +1007,49 @@ export const AdminPortalPage = () => {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
-          Create New Faculty Account
+          Provision New Staff Account
         </DialogTitle>
         <Box component="form" onSubmit={handleCreateFaculty}>
           <DialogContent dividers>
             <Alert severity="info" sx={{ mb: 2.5, fontSize: '0.825rem' }}>
-              Creating a faculty account securely sets the <strong>FACULTY</strong> role and encrypts the password with bcrypt. The faculty member will be immediately available for weekly timetables, classes, and supervision duties.
+              Provisioning an authorized account securely sets institutional role permissions and hashes the password with bcrypt. The user will be immediately available across CampusSync.
             </Alert>
 
             <Grid container spacing={2}>
               <Grid item xs={12}>
                 <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Account Role to Provision"
+                  value={facultyForm.role}
+                  onChange={(e) => {
+                    const r = e.target.value;
+                    setFacultyForm({
+                      ...facultyForm,
+                      role: r,
+                      designation:
+                        r === 'faculty'
+                          ? 'Assistant Professor'
+                          : r === 'coordinator'
+                          ? 'Lead Coordinator'
+                          : 'Campus Resource Manager',
+                    });
+                  }}
+                >
+                  <MenuItem value="faculty">Faculty Member</MenuItem>
+                  <MenuItem value="coordinator">Club Coordinator</MenuItem>
+                  <MenuItem value="resource_manager">Resource Manager</MenuItem>
+                </TextField>
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
                   fullWidth
                   required
                   size="small"
-                  label="Full Name (with honorific)"
-                  placeholder="e.g., Dr. Marcus Chen"
+                  label="Full Name (with honorific / title)"
+                  placeholder="e.g., Dr. Marcus Chen / Sarah Jenkins"
                   value={facultyForm.fullName}
                   onChange={(e) => setFacultyForm({ ...facultyForm, fullName: e.target.value })}
                 />
@@ -972,7 +1062,7 @@ export const AdminPortalPage = () => {
                   type="email"
                   size="small"
                   label="Official College Email"
-                  placeholder="name@campussphere.edu"
+                  placeholder="name@campussync.edu"
                   value={facultyForm.email}
                   onChange={(e) => setFacultyForm({ ...facultyForm, email: e.target.value })}
                   helperText="Must be unique across the campus portal"
@@ -982,13 +1072,12 @@ export const AdminPortalPage = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  required
                   size="small"
-                  label="Faculty Employee ID"
-                  placeholder="e.g., FAC-CSE-105"
+                  label={facultyForm.role === 'coordinator' ? 'Student or Employee ID' : 'Employee ID'}
+                  placeholder="e.g., EMP-2026-09"
                   value={facultyForm.employeeId}
                   onChange={(e) => setFacultyForm({ ...facultyForm, employeeId: e.target.value.toUpperCase() })}
-                  helperText="Unique uppercase institutional ID"
+                  helperText="Unique uppercase institutional identifier"
                 />
               </Grid>
 
@@ -997,7 +1086,7 @@ export const AdminPortalPage = () => {
                   select
                   fullWidth
                   size="small"
-                  label="Academic Department"
+                  label="Department"
                   value={facultyForm.department}
                   onChange={(e) => setFacultyForm({ ...facultyForm, department: e.target.value })}
                 >
@@ -1014,17 +1103,81 @@ export const AdminPortalPage = () => {
                   select
                   fullWidth
                   size="small"
-                  label="Designation / Academic Rank"
+                  label="Designation / Title"
                   value={facultyForm.designation}
                   onChange={(e) => setFacultyForm({ ...facultyForm, designation: e.target.value })}
                 >
-                  {DESIGNATIONS.map((desig) => (
+                  {(facultyForm.role === 'coordinator'
+                    ? COORDINATOR_DESIGNATIONS
+                    : facultyForm.role === 'resource_manager'
+                    ? RESOURCE_MANAGER_DESIGNATIONS
+                    : FACULTY_DESIGNATIONS
+                  ).map((desig) => (
                     <MenuItem key={desig} value={desig}>
                       {desig}
                     </MenuItem>
                   ))}
                 </TextField>
               </Grid>
+
+              {/* Conditional Assignment Selectors */}
+              {facultyForm.role === 'coordinator' && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="assigned-clubs-label">Assigned Club(s)</InputLabel>
+                    <Select
+                      labelId="assigned-clubs-label"
+                      multiple
+                      value={facultyForm.assignedClubs}
+                      onChange={(e) => setFacultyForm({ ...facultyForm, assignedClubs: e.target.value })}
+                      label="Assigned Club(s)"
+                      renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {selected.map((val) => {
+                            const club = clubsList.find((c) => (c._id || c).toString() === val.toString());
+                            return <Chip key={val} label={club?.name || val} size="small" />;
+                          })}
+                        </Box>
+                      )}
+                    >
+                      {clubsList.map((c) => (
+                        <MenuItem key={c._id} value={c._id.toString()}>
+                          {c.name} ({c.code})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+
+              {facultyForm.role === 'resource_manager' && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="assigned-resources-label">Assigned Campus Resource(s)</InputLabel>
+                    <Select
+                      labelId="assigned-resources-label"
+                      multiple
+                      value={facultyForm.assignedResources}
+                      onChange={(e) => setFacultyForm({ ...facultyForm, assignedResources: e.target.value })}
+                      label="Assigned Campus Resource(s)"
+                      renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {selected.map((val) => {
+                            const res = resourcesList.find((r) => (r._id || r).toString() === val.toString());
+                            return <Chip key={val} label={res?.name || val} size="small" />;
+                          })}
+                        </Box>
+                      )}
+                    >
+                      {resourcesList.map((r) => (
+                        <MenuItem key={r._id} value={r._id.toString()}>
+                          {r.name} — {r.type} ({r.location})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
 
               <Grid item xs={12} sm={6}>
                 <TextField
@@ -1047,8 +1200,9 @@ export const AdminPortalPage = () => {
                   onChange={(e) => setFacultyForm({ ...facultyForm, status: e.target.value })}
                 >
                   <MenuItem value="active">Active (Permit Immediate Login)</MenuItem>
-                  <MenuItem value="pending">Pending Institutional Verification</MenuItem>
+                  <MenuItem value="pending">Pending Verification</MenuItem>
                   <MenuItem value="suspended">Suspended</MenuItem>
+                  <MenuItem value="inactive">Inactive</MenuItem>
                 </TextField>
               </Grid>
 
@@ -1063,7 +1217,7 @@ export const AdminPortalPage = () => {
                     placeholder="Minimum 6 characters"
                     value={facultyForm.password}
                     onChange={(e) => setFacultyForm({ ...facultyForm, password: e.target.value })}
-                    helperText="Plaintext is never stored; hashed with 10 bcrypt salt rounds upon save."
+                    helperText="Hashed with 10 bcrypt salt rounds on server."
                     InputProps={{
                       endAdornment: (
                         <InputAdornment position="end">
@@ -1097,13 +1251,13 @@ export const AdminPortalPage = () => {
               disabled={savingFaculty}
               sx={{ bgcolor: '#0f172a', fontWeight: 700, textTransform: 'none' }}
             >
-              {savingFaculty ? 'Creating Account...' : 'Create Faculty Account'}
+              {savingFaculty ? 'Provisioning...' : 'Provision Account'}
             </Button>
           </DialogActions>
         </Box>
       </Dialog>
 
-      {/* Modal: Edit Faculty Details */}
+      {/* Modal: Edit Staff / User Account Details */}
       <Dialog
         open={openEditFacultyModal}
         onClose={() => !savingEditFaculty && setOpenEditFacultyModal(false)}
@@ -1111,11 +1265,44 @@ export const AdminPortalPage = () => {
         fullWidth
       >
         <DialogTitle sx={{ fontWeight: 800, color: '#0f172a', pb: 1 }}>
-          Edit Faculty Profile & Credentials
+          Edit User Account & Role Permissions
         </DialogTitle>
         <Box component="form" onSubmit={handleUpdateFaculty}>
           <DialogContent dividers>
             <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Account Role"
+                  value={editFacultyForm.role}
+                  onChange={(e) => setEditFacultyForm({ ...editFacultyForm, role: e.target.value })}
+                >
+                  <MenuItem value="student">Student</MenuItem>
+                  <MenuItem value="faculty">Faculty Member</MenuItem>
+                  <MenuItem value="coordinator">Club Coordinator</MenuItem>
+                  <MenuItem value="resource_manager">Resource Manager</MenuItem>
+                  <MenuItem value="admin">Campus Administrator</MenuItem>
+                </TextField>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  label="Account Status"
+                  value={editFacultyForm.status}
+                  onChange={(e) => setEditFacultyForm({ ...editFacultyForm, status: e.target.value })}
+                >
+                  <MenuItem value="active">Active</MenuItem>
+                  <MenuItem value="suspended">Suspended</MenuItem>
+                  <MenuItem value="inactive">Inactive / Deactivated</MenuItem>
+                  <MenuItem value="pending">Pending</MenuItem>
+                </TextField>
+              </Grid>
+
               <Grid item xs={12}>
                 <TextField
                   fullWidth
@@ -1133,7 +1320,7 @@ export const AdminPortalPage = () => {
                   required
                   type="email"
                   size="small"
-                  label="College Email"
+                  label="Official College Email"
                   value={editFacultyForm.email}
                   onChange={(e) => setEditFacultyForm({ ...editFacultyForm, email: e.target.value })}
                 />
@@ -1142,9 +1329,8 @@ export const AdminPortalPage = () => {
               <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
-                  required
                   size="small"
-                  label="Employee ID"
+                  label="Employee ID / Student ID"
                   value={editFacultyForm.employeeId}
                   onChange={(e) => setEditFacultyForm({ ...editFacultyForm, employeeId: e.target.value.toUpperCase() })}
                 />
@@ -1169,44 +1355,81 @@ export const AdminPortalPage = () => {
 
               <Grid item xs={12} sm={6}>
                 <TextField
-                  select
                   fullWidth
                   size="small"
-                  label="Designation / Academic Rank"
+                  label="Designation / Title"
                   value={editFacultyForm.designation}
                   onChange={(e) => setEditFacultyForm({ ...editFacultyForm, designation: e.target.value })}
-                >
-                  {DESIGNATIONS.map((desig) => (
-                    <MenuItem key={desig} value={desig}>
-                      {desig}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  label="Phone Number"
-                  value={editFacultyForm.phoneNumber}
-                  onChange={(e) => setEditFacultyForm({ ...editFacultyForm, phoneNumber: e.target.value })}
                 />
               </Grid>
 
-              <Grid item xs={12} sm={6}>
+              {/* Conditional Assignment Selectors */}
+              {editFacultyForm.role === 'coordinator' && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="edit-assigned-clubs-label">Assigned Club(s)</InputLabel>
+                    <Select
+                      labelId="edit-assigned-clubs-label"
+                      multiple
+                      value={editFacultyForm.assignedClubs}
+                      onChange={(e) => setEditFacultyForm({ ...editFacultyForm, assignedClubs: e.target.value })}
+                      label="Assigned Club(s)"
+                      renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {selected.map((val) => {
+                            const club = clubsList.find((c) => (c._id || c).toString() === val.toString());
+                            return <Chip key={val} label={club?.name || val} size="small" />;
+                          })}
+                        </Box>
+                      )}
+                    >
+                      {clubsList.map((c) => (
+                        <MenuItem key={c._id} value={c._id.toString()}>
+                          {c.name} ({c.code})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+
+              {editFacultyForm.role === 'resource_manager' && (
+                <Grid item xs={12}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="edit-assigned-resources-label">Assigned Campus Resource(s)</InputLabel>
+                    <Select
+                      labelId="edit-assigned-resources-label"
+                      multiple
+                      value={editFacultyForm.assignedResources}
+                      onChange={(e) => setEditFacultyForm({ ...editFacultyForm, assignedResources: e.target.value })}
+                      label="Assigned Campus Resource(s)"
+                      renderValue={(selected) => (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {selected.map((val) => {
+                            const res = resourcesList.find((r) => (r._id || r).toString() === val.toString());
+                            return <Chip key={val} label={res?.name || val} size="small" />;
+                          })}
+                        </Box>
+                      )}
+                    >
+                      {resourcesList.map((r) => (
+                        <MenuItem key={r._id} value={r._id.toString()}>
+                          {r.name} — {r.type} ({r.location})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+
+              <Grid item xs={12}>
                 <TextField
-                  select
                   fullWidth
                   size="small"
-                  label="Account Status"
-                  value={editFacultyForm.status}
-                  onChange={(e) => setEditFacultyForm({ ...editFacultyForm, status: e.target.value })}
-                >
-                  <MenuItem value="active">Active</MenuItem>
-                  <MenuItem value="pending">Pending</MenuItem>
-                  <MenuItem value="suspended">Suspended</MenuItem>
-                </TextField>
+                  label="Contact Phone Number"
+                  value={editFacultyForm.phoneNumber}
+                  onChange={(e) => setEditFacultyForm({ ...editFacultyForm, phoneNumber: e.target.value })}
+                />
               </Grid>
 
               <Grid item xs={12}>
@@ -1257,50 +1480,8 @@ export const AdminPortalPage = () => {
           </DialogActions>
         </Box>
       </Dialog>
-
-      {/* Modal: General User Role/Status Edit */}
-      <Dialog open={openUserModal} onClose={() => setOpenUserModal(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 800 }}>Manage User Account</DialogTitle>
-        <Box component="form" onSubmit={handleSaveUser}>
-          <DialogContent dividers>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-              {selectedUser?.fullName} ({selectedUser?.email})
-            </Typography>
-
-            <TextField
-              select
-              fullWidth
-              label="Role"
-              value={editRole}
-              onChange={(e) => setEditRole(e.target.value)}
-              sx={{ mb: 2 }}
-            >
-              <MenuItem value="student">Student</MenuItem>
-              <MenuItem value="faculty">Faculty</MenuItem>
-              <MenuItem value="coordinator">Club Coordinator</MenuItem>
-              <MenuItem value="resource_manager">Resource Manager</MenuItem>
-              <MenuItem value="admin">Campus Administrator</MenuItem>
-            </TextField>
-
-            <TextField
-              select
-              fullWidth
-              label="Account Status"
-              value={editStatus}
-              onChange={(e) => setEditStatus(e.target.value)}
-            >
-              <MenuItem value="active">Active</MenuItem>
-              <MenuItem value="suspended">Suspended</MenuItem>
-            </TextField>
-          </DialogContent>
-          <DialogActions sx={{ p: 2 }}>
-            <Button onClick={() => setOpenUserModal(false)}>Cancel</Button>
-            <Button type="submit" variant="contained" color="secondary">
-              Update Account
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
     </Box>
   );
 };
+
+export default AdminPortalPage;

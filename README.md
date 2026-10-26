@@ -1,8 +1,9 @@
-# CampusSphere — Smart Campus Community & Collaboration Platform
+# CampusSync — Smart Campus Management & Community Platform
 
-> **Tagline:** *One Campus. One Community. Endless Possibilities.*
+> **Tagline:** *One Campus. Everything in Sync.*  
+> **Official Title:** *CampusSync — Smart Campus Management & Community Platform*
 
-CampusSphere is a centralized digital ecosystem engineered for higher education institutions. It connects students, faculty, club coordinators, resource managers, and campus administrators into a unified platform for events, lost-and-found matching, peer marketplaces, skill-sharing tutoring, clubs, community service volunteering, and facility booking.
+CampusSync is a production-grade, centralized digital ecosystem engineered for higher education institutions. Built on the modern MERN stack, it seamlessly unifies students, faculty, club coordinators, resource managers, and campus administrators into one synchronized platform for academic timetabling, roll-call attendance, club management, campus facility reservations, community service volunteering, peer marketplaces, tutoring, and lost-and-found recovery.
 
 ---
 
@@ -13,15 +14,15 @@ CampusSphere is a centralized digital ecosystem engineered for higher education 
 | Layer | Technologies |
 | :--- | :--- |
 | **Frontend** | React 18, Vite, Material UI (MUI v5/v6), Emotion, React Router v6, Axios, Recharts, Socket.IO Client |
-| **Backend** | Node.js, Express.js (ES Modules), Socket.IO, Multer, Helmet, Morgan, Express Rate Limit |
+| **Backend** | Node.js, Express.js (ES Modules), Socket.IO, Multer, Helmet, Morgan, Express Rate Limit, Zod |
 | **Database** | MongoDB with Mongoose ODM (26 normalized schemas with compound indexes & validation) |
-| **Authentication** | JWT (JSON Web Tokens), bcryptjs password hashing, server-enforced RBAC |
-| **Testing** | Vitest, Supertest, React Testing Library, JSDOM |
-| **Deployment** | Vercel (Frontend SPA), Render (Backend Node API), MongoDB Atlas |
+| **Authentication & RBAC** | JWT (JSON Web Tokens), bcryptjs password hashing, server-enforced role determination, scoped authorization |
+| **Testing** | Vitest, Supertest, React Testing Library, JSDOM (100% test pass rate across backend & frontend) |
+| **Deployment** | Vercel / Netlify (Frontend SPA), Render / Railway / AWS (Backend Node API), MongoDB Atlas |
 
 ---
 
-### 1.2 Mermaid Entity-Relationship (ER) Diagram
+### 1.2 Mermaid Architecture & ER Diagram
 
 ```mermaid
 erDiagram
@@ -57,6 +58,7 @@ erDiagram
 
     Club ||--o{ Event : organizes
     Club ||--o{ ClubMembership : contains
+    Club }o--o{ User : managed_by_coordinators
 
     Event ||--o{ EventRegistration : tracks
 
@@ -67,255 +69,262 @@ erDiagram
     TutoringSession ||--o| TutoringReview : rates
 
     CampusResource ||--o{ ResourceBooking : schedules
+    CampusResource }o--o{ User : managed_by_resource_managers
 
     VolunteeringActivity ||--o{ VolunteeringRegistration : awards_hours
 ```
 
 ---
 
-## 2. User Roles & Server-Enforced RBAC
+## 2. Five Supported User Roles & Server-Enforced RBAC
 
-CampusSphere enforces strict, server-side Role-Based Access Control (RBAC). Roles are never trusted from client-side state.
+CampusSync enforces strict, server-side Role-Based Access Control (RBAC). User roles and account statuses are **strictly determined from the trusted database record** on every request and are never trusted from the client.
 
-| Role | Permissions & Scope |
-| :--- | :--- |
-| **Student** | Discover and register for events (with atomic waitlists), report lost/found items, file ownership claims, list marketplace goods, request exchanges, book tutoring, join clubs, reserve permitted resources, track verified volunteering hours. |
-| **Faculty** | View personalized weekly timetable and chronological daily schedule, manage subjects and view student rosters, record lecture roll-call attendance with duplicate prevention, manage substitution and exam invigilation duties, supervise clubs and community service drives, approve volunteer hours, publish official announcements. |
-| **Club Coordinator** | Manage assigned club profiles, review membership applications, assign committee roles (e.g. PR Lead, Treasurer), host club hackathons/events. |
-| **Resource Manager** | Manage campus halls, labs, and equipment. Configure operating hours, inspect conflict detection, approve or reject booking reservations. |
-| **Campus Administrator** | Full platform governance, user activation/suspension, content moderation for flagged posts, compliance audit log inspection, timetable scheduling with real-time conflict detection, duty assignment, campus-wide analytics. |
-
----
-
-## 3. Core Modules Overview
-
-### 1. Campus Events & Attendance (`/events`)
-- Atomic capacity enforcement with automatic waitlist queueing.
-- Automatic waitlist promotion when confirmed seats are cancelled.
-- Unique 6-character check-in PIN code for verified participant attendance.
-
-### 2. Lost & Found Matching (`/lost-found`)
-- Deterministic matching algorithm scoring candidate items based on Category (35%), Color (15%), Date Proximity (20%), Location overlap (15%), and Keyword overlap (15%).
-- Private proof-of-ownership claim verification (serial numbers, wallpapers, and markings are kept strictly confidential).
-
-### 3. Student Marketplace & Item Exchange (`/marketplace`)
-- Student exchange for textbooks, graphing calculators, lab coats, and electronics.
-- Negotiation threads for buy or exchange offers.
-- Handover status tracking without false payment gateway claims.
-
-### 4. Peer Tutoring & Skill Sharing (`/tutoring`)
-- Subject mentor profiles with weekly availability slots.
-- Anti-double-booking validation preventing overlapping slots and past dates.
-- Verified 5-star reviews restricted exclusively to students who attended completed sessions.
-
-### 5. Clubs & Societies (`/clubs`)
-- Club discovery with categories (Technical, Cultural, Sports, Arts).
-- Application and coordinator approval workflows.
-- Coordinator committee role assignment.
-
-### 6. Announcements & Real-Time Alerts (`/announcements`, `/notifications`)
-- Target audience broadcasting: Campus-wide, Department, Club, or Role.
-- Pinned emergency banners and expiration date filtering.
-- Persistent MongoDB notifications delivered live via authenticated Socket.IO rooms.
-
-### 7. Resource Booking & Conflict Guard (`/bookings`)
-- Rooms, engineering labs, and 4K projection kits with operating hours.
-- Server-side validation preventing overlapping approved bookings for the same resource.
-
-### 8. Volunteering & Community Service (`/volunteering`)
-- Community service drives with verified supervisor hours.
-- Downloadable/printable participation certificate generator with unique verification codes.
-
-### 9. Campus Analytics & Moderation (`/analytics`, `/admin`)
-- Aggregated real-time metrics using MongoDB aggregation pipelines (`$group`, `$match`).
-- Recharts visualizations (Bar, Pie, Line) and one-click CSV report export.
-- Administrative content moderation queue and security audit trail.
-
-### 10. Faculty Academic Schedule, Attendance & Reporting (`/faculty/*`, `/timetable`)
-- **Interactive Timetable**: 6-day weekly grid and chronological daily view with real-time schedule conflict flags.
-- **Subjects & Classes**: Subject cards, weekly lecture/lab hour breakdowns, assigned rooms, and enrolled student roster drill-downs.
-- **Lecture Attendance Roll-Call (`/faculty/attendance`)**: Student roll-call (Present / Late / Absent), topic logging, pre-flight existing session detection, anti-duplicate validation, and inline status correction.
-- **Complete Attendance History & Reporting (`/faculty/attendance-history`)**:
-  - **Session-Level History**: Filter by subject, class cohort, date range, topic search, and submission status with server-side pagination.
-  - **Individual Student Reports**: Student attendance percentage `(Attended / Total) × 100` with configurable institutional Late policies (0.5 credit standard), chronological date-wise history, and missed lecture logs.
-  - **Subject & Class Analytics**: Aggregated lecture counts, average attendance rates, and enrollment metrics.
-  - **Missing / Unrecorded Attendance**: Compares weekly timetable schedules with submitted records to flag unrecorded past sessions.
-  - **Controlled Correction & Audit Trail**: Authorized correction of submitted sessions with previous/new status tracking and permanent audit logging (`editHistory`).
-  - **Data Export & Print**: Printable reports and RFC 4180 compliant CSV exports.
-- **Substitution & Duty Management**: Workflow for exam invigilations, proxy lectures, and committee meetings with status tracking (Pending, Acknowledged, Completed).
-- **Supervision & Approvals**: Oversight of supervised student clubs, sponsored events, and direct one-click verification of student community service hours.
-- **Administrative Timetable Management**: Real-time server-side conflict detection engine guarding against faculty double-booking, room/lab collisions, and student cohort overlaps.
+| Role | Primary Scope & Authorized Responsibilities | Dedicated View / Dashboard |
+| :--- | :--- | :--- |
+| **Student** | Discover and register for campus events (with waitlists and PIN check-in), report lost/found items, file proof-of-ownership claims, trade textbooks/lab equipment on the peer marketplace, book peer tutoring, join student clubs, reserve permitted campus facilities, and log verified volunteering hours. | `/dashboard` (Student Portal) |
+| **Faculty** | View personalized weekly timetable and chronological daily schedule, manage subjects and view student rosters, record lecture roll-call attendance with duplicate prevention, manage substitution and exam invigilation duties, supervise clubs and community service drives, approve volunteer hours, and publish official announcements. | `/dashboard` (Faculty Academic Hub) |
+| **Club Coordinator** | Manage assigned student club profiles, review membership applications (Approve / Reject), assign committee roles (e.g. PR Lead, Treasurer, Tech Lead), host club hackathons/events with scoped club permission enforcement, and monitor member activity. | `/coordinator/dashboard` & `/clubs` |
+| **Resource Manager** | Oversee assigned campus facilities (seminar halls, auditoriums, high-performance computing labs, projection kits), review booking reservation requests (Approve / Reject with anti-collision checks), configure availability, and manage maintenance status. | `/resource-manager/dashboard` & `/bookings` |
+| **Campus Administrator** | Full platform governance: provision Staff accounts (Faculty, Club Coordinators, Resource Managers) with club and facility assignments, activate / suspend / deactivate user accounts, manage timetable allocations with real-time conflict detection, supervise compliance audit logs, and monitor campus-wide analytics. | `/admin` (Admin Portal) |
 
 ---
 
-## 4. Demo Accounts for Immediate Testing
+## 3. Authentication & Account Management Architecture
 
-The database seeding script pre-populates 5 role-specific demonstration accounts:
+### 3.1 Unified Single Login
+All 5 user roles authenticate through **one shared login page** (`/login`) using their official email and password.
+- **No Client Role Selector**: Users never select their role during login.
+- **Server-Determined Routing**: Upon successful authentication, the backend returns the authenticated user's trusted database record (`role`, `status`, `assignedClubs`, `assignedResources`). The frontend router automatically redirects the user to their designated dashboard:
+  - `admin` $\rightarrow$ `/admin`
+  - `coordinator` $\rightarrow$ `/coordinator/dashboard`
+  - `resource_manager` $\rightarrow$ `/resource-manager/dashboard`
+  - `faculty` $\rightarrow$ `/dashboard`
+  - `student` $\rightarrow$ `/dashboard`
+- **Show / Hide Password Control**: Password visibility toggle built directly into the login input for improved accessibility.
+- **Dual-Domain Compatibility**: Seamlessly supports both `@campussync.edu` (new official branding) and legacy `@campussphere.edu` credentials for backwards compatibility.
 
-| Role | Email | Password | Primary Features to Test |
+### 3.2 Public Registration Guardrails
+- **Student-Only Public Registration**: The public registration endpoint (`POST /api/auth/register`) strictly forces `role: 'student'`. Any attempt by a client to submit `role: 'admin'`, `role: 'faculty'`, etc., is ignored.
+- **Administrative Provisioning for Privileged Roles**: Faculty, Club Coordinators, Resource Managers, and Administrators can only be provisioned by authenticated administrators via `POST /api/admin/staff` or `POST /api/admin/faculty`.
+
+### 3.3 Account Status Lifecycle & Invalidation
+- **Status Values**: `active`, `suspended`, `inactive`, `pending`.
+- **Immediate Invalidation**: The authentication middleware (`server/middleware/auth.js`) inspects the user's status from the database on every authenticated request. Suspended, inactive, or pending accounts receive an immediate HTTP 403 response with a clear descriptive message, even if they hold a valid unexpired JWT token.
+- **Last-Admin Safeguard**: The system prevents the last remaining active administrator from being suspended, deactivated, or deleted.
+
+### 3.4 Scoped Permission Middleware
+- **Resource Managers**: Can only review bookings (`PATCH /api/resources/bookings/:id/review`) and update resources (`PATCH /api/resources/:id`) for facilities to which they are explicitly assigned (`assignedResources` or `CampusResource.managers`). Requests for unassigned resources are rejected with HTTP 403 Forbidden.
+- **Club Coordinators**: Can only review memberships, assign committee roles, and create events for clubs to which they are explicitly assigned (`assignedClubs`). Requests for unassigned clubs are rejected with HTTP 403 Forbidden.
+
+---
+
+## 4. Core Modules & Features
+
+### 1. Unified Dashboards
+- **Student Dashboard**: Quick access to active registrations, item claims, tutoring sessions, and volunteer hours.
+- **Faculty Dashboard**: Live daily lecture schedule, upcoming invigilation duties, attendance KPI tiles, and one-click roll call.
+- **Club Coordinator Dashboard**: Summary metrics for assigned clubs, active members, pending membership applications with quick review modal, and upcoming club events.
+- **Resource Manager Dashboard**: Assigned facilities count, pending booking requests with approval modal, upcoming reservations, and facility maintenance status controls.
+- **Admin Portal**: User Directory with status chips, assigned club/facility badges, Staff Provisioning dialog, and Account Edit modal with password reset capability.
+
+### 2. Timetable Management & Conflict Guard (`/timetable`)
+- Real-time server-side conflict detection engine guarding against:
+  - Faculty double-booking across different classes.
+  - Room / Laboratory physical collisions.
+  - Student cohort scheduling overlaps.
+
+### 3. Lecture Attendance Roll-Call & History (`/faculty/attendance`, `/faculty/attendance-history`)
+- **Roll-Call**: Present, Late, Absent, with automatic duplicate session prevention.
+- **Session-Level History**: Filterable by subject, cohort, date range, topic, and submission status.
+- **Student Reports**: Calculates individual attendance percentages with institutional Late policies (0.5 credit standard) and chronological date-wise histories.
+- **Controlled Audit Trail**: Authorized corrections with previous/new status tracking and permanent audit logging (`editHistory`).
+
+### 4. Campus Events & PIN Check-In (`/events`)
+- Atomic capacity limits with automated waitlist queueing and auto-promotion upon cancellation.
+- 6-character verification PIN codes for on-site attendance verification.
+
+### 5. Campus Facility Bookings (`/bookings`)
+- Seminar halls, conference centers, engineering labs, and projection equipment.
+- Conflict detection preventing double-booking of physical resources.
+
+### 6. Student Marketplace (`/marketplace`) & Peer Tutoring (`/tutoring`)
+- Book and equipment exchanges with negotiation threads.
+- Verified peer tutoring slots with anti-double-booking guardrails and verified review submissions.
+
+### 7. Volunteering & Community Service (`/volunteering`)
+- Verified service drives with supervisor hour approvals and verifiable PDF/printable certificates.
+
+---
+
+## 5. Demonstration Accounts for Instant Testing
+
+The database seeding script pre-populates official demonstration accounts for all 5 roles:
+
+| Role | Email | Password | Primary Scenarios to Test |
 | :--- | :--- | :--- | :--- |
-| **Student** | `student@campussphere.edu` | `Student@123` | Event registration, PIN check-in, Marketplace listing, Tutoring request, Volunteering records |
-| **Student 2** | `student2@campussphere.edu` | `Student@123` | Peer counterparty for marketplace offers, peer tutoring sessions |
-| **Campus Admin** | `admin@campussphere.edu` | `Admin@123` | Timetable management & conflict engine, user suspension/activation, content moderation, audit logs |
-| **Faculty** | `faculty@campussphere.edu` | `Faculty@123` | Weekly timetable, lecture roll-call attendance, exam & substitution duties, student supervision, volunteering approvals |
-| **Club Coordinator** | `coordinator@campussphere.edu` | `Coordinator@123` | Manage ACM Student Chapter, review memberships, assign committee roles |
-| **Resource Manager** | `resourcemanager@campussphere.edu` | `Manager@123` | Review room and lab reservations, prevent schedule conflicts |
+| **Student** | `student@campussync.edu` | `Student@123` | Event registration, PIN check-in, Marketplace listing, Tutoring request, Volunteering records |
+| **Student 2** | `student2@campussync.edu` | `Student@123` | Peer counterparty for marketplace offers, peer tutoring sessions |
+| **Faculty** | `faculty@campussync.edu` | `Faculty@123` | Weekly timetable, lecture roll-call attendance, exam & substitution duties, volunteer approvals |
+| **Club Coordinator** | `coordinator@campussync.edu` | `Coordinator@123` | Coordinator dashboard, review membership applications, assign committee roles |
+| **Resource Manager** | `resourcemanager@campussync.edu` | `Manager@123` | Resource Manager dashboard, review booking reservations, facility maintenance mode |
+| **Campus Admin** | `admin@campussync.edu` | `Admin@123` | Admin Portal, provision staff accounts, assign clubs/resources, suspend/edit users |
 
-> *Tip: On both the Landing page and Login page, you can use the **1-Click Demo Buttons** to instantly authenticate without manual typing.*
+> *Tip: On both the Landing page and Login page (`/login`), you can click the **1-Click Demo Buttons** to instantly populate credentials for any role.*
 
 ---
 
-## 5. Local Setup & Installation
+## 6. Local Setup & Installation
 
 ### Prerequisites
-- **Node.js**: v18.0.0 or higher (v22 tested)
-- **MongoDB**: Local MongoDB server running on port 27017 or a MongoDB Atlas URI
+- **Node.js**: v18.0.0 or higher (v20+ recommended)
+- **MongoDB**: Local MongoDB instance running on port 27017 or a MongoDB Atlas URI
 - **Git**
 
-### Step 1: Clone and Install Dependencies
+### Step 1: Clone and Install
 ```bash
-git clone https://github.com/your-username/CampusSphere.git
-cd CampusSphere
+git clone https://github.com/your-username/CampusSync.git
+cd CampusSync
 
-# Install all dependencies across root, server, and client:
+# Install root, server, and client dependencies concurrently:
 npm run install:all
 ```
 
 ### Step 2: Configure Environment Variables
-Copy `.env.example` in `server/.env`:
+Copy `.env.example` in both `server/` and `client/`:
+
 ```bash
-# Server configuration
+# Server configuration (server/.env)
 PORT=5000
 NODE_ENV=development
 CLIENT_URL=http://localhost:5173
-MONGODB_URI=mongodb://127.0.0.1:27017/campussphere
-JWT_SECRET=super_secure_jwt_secret_key_campussphere_2026_dev
+MONGODB_URI=mongodb://127.0.0.1:27017/campussync
+JWT_SECRET=your_jwt_secret_minimum_32_characters_long_placeholder
 JWT_EXPIRES_IN=7d
 UPLOAD_DIR=uploads
 MAX_FILE_SIZE_MB=5
-ALLOWED_EMAIL_DOMAIN=campussphere.edu
+ALLOWED_EMAIL_DOMAIN=campussync.edu
 REQUIRE_CAMPUS_EMAIL=false
+
+# Client configuration (client/.env)
+VITE_API_URL=/api
 ```
 
-### Step 3: Seed the Database
-Run the repeatable database seeding script to populate departments, demo users, events, marketplace items, resources, and clubs:
+### Step 3: Seed Demonstration Data
+Run the seeding script to initialize departments, sample courses, resources, clubs, and demo accounts:
 ```bash
 npm run seed
 ```
 
-### Step 4: Start the Development Server
+### Step 4: Run Development Servers
 ```bash
-# Starts both Express backend (Port 5000) and Vite frontend (Port 5173) concurrently:
+# Concurrently starts Express API (Port 5000) and Vite frontend (Port 5173):
 npm run dev
 ```
-
-Visit **`http://localhost:5173`** in your browser.
+Open **`http://localhost:5173`** in your browser.
 
 ---
 
-## 6. Running Automated Tests & Production Build
+## 7. Automated Testing & Verification
 
-### Backend Tests (Vitest + Supertest)
-```bash
-npm --prefix server test
-```
-*Validates health check, JWT authentication, bcrypt password hashing, RBAC route blocks, event capacity queries, and analytics aggregation.*
+CampusSync includes full-coverage integration and component test suites:
 
-### Frontend Tests (Vitest + React Testing Library)
 ```bash
-npm --prefix client test
-```
+# Run all tests (both backend integration and client tests):
+npm run test:all
 
-### Frontend Production Build
-```bash
+# Run backend API & RBAC tests (Vitest + Supertest):
+npm test
+
+# Run frontend component & routing tests (Vitest + React Testing Library):
+npm run test:client
+
+# Run production frontend bundle build:
 npm run build
 ```
 
----
-
-## 7. API Reference Summary
-
-All endpoints are hosted under `/api` and return standardized responses:
-```json
-{
-  "success": true,
-  "message": "Operation completed successfully",
-  "data": {}
-}
-```
-
-- `POST /api/auth/register` — Register a student account
-- `POST /api/auth/login` — Authenticate and receive JWT
-- `GET /api/auth/me` — Get authenticated user profile
-- `GET /api/dashboard` — Get student personalized dashboard
-- `GET /api/events` — Browse events with category and date filters
-- `POST /api/events/:id/register` — Register with atomic capacity check
-- `POST /api/events/:id/cancel` — Cancel registration and trigger waitlist promotion
-- `POST /api/events/:id/checkin` — Verify attendance with 6-digit PIN
-- `GET /api/lost-found` — Browse lost and found reports
-- `POST /api/lost-found/:id/claim` — Submit private proof-of-ownership claim
-- `PATCH /api/lost-found/claims/:claimId` — Approve or reject ownership claim
-- `GET /api/marketplace` — Browse peer marketplace listings
-- `POST /api/marketplace/:id/request` — Submit buy or exchange proposal
-- `PATCH /api/marketplace/requests/:requestId` — Accept/complete handover
-- `GET /api/tutors` — Search peer tutors by subject and rating
-- `POST /api/tutors/request` — Book session with anti-double-booking check
-- `POST /api/tutors/sessions/:sessionId/review` — Submit verified participant review
-- `GET /api/clubs` — Browse student organizations
-- `POST /api/clubs/:id/apply` — Apply for club membership
-- `PATCH /api/clubs/memberships/:membershipId` — Approve or reject membership
-- `GET /api/resources` — List campus halls, labs, and equipment
-- `POST /api/resources/book` — Request reservation with conflict guard
-- `PATCH /api/resources/bookings/:bookingId/review` — Resource manager approval
-- `GET /api/volunteering` — Browse community service opportunities
-- `PATCH /api/volunteering/registrations/:id/verify` — Award verified hours & certificate
-- `GET /api/analytics` — Fetch aggregated metrics
-- `GET /api/analytics/export-csv` — Export events analytics as CSV
-- `GET /api/admin/users` — Administrator user directory with multi-field search and role filters
-- `PATCH /api/admin/users/:id` — Suspend or reactivate user accounts with last-admin safeguard
-- `POST /api/admin/faculty` — Create new faculty account (Admin only; server-enforced role, bcrypt hash, unique email & employee ID)
-- `PUT /api/admin/faculty/:id` — Update faculty profile, academic rank, department, and credentials (Admin only)
-- `GET /api/timetable/my` — Fetch faculty weekly academic schedule
-- `POST /api/timetable` — Administrator creates timetable slot with conflict check
-- `POST /api/timetable/check-conflict` — Real-time server-side schedule conflict detection
-- `GET /api/subjects` — List academic subjects and weekly hours
-- `GET /api/classes` — List class divisions and cohorts
-- `GET /api/classes/:id/students` — Retrieve enrolled student roster for a class
-- `GET /api/duties/my` — Fetch faculty assigned exam invigilations, substitutions & duties
-- `PATCH /api/duties/:id/status` — Acknowledge or complete assigned duty
-- `POST /api/attendance` — Submit lecture attendance session (with validation and duplicate check)
-- `GET /api/attendance/check-session` — Check if attendance was already recorded for date/slot
-- `GET /api/attendance/sessions` — Paginated and filtered attendance session history
-- `GET /api/attendance/sessions/:id` — Detailed session roll-call records and audit trail
-- `PATCH /api/attendance/sessions/:id` — Authorized attendance correction with audit logging
-- `GET /api/attendance/student/:studentId` — Individual student attendance report & late credit calculations
-- `GET /api/attendance/reports/subject` — Subject-wise aggregate attendance metrics
-- `GET /api/attendance/reports/class` — Class division cohort attendance analytics
-- `GET /api/attendance/reports/daily` — Daily lecture attendance reports
-- `GET /api/attendance/reports/summary` — Aggregate attendance KPIs for faculty
-- `GET /api/attendance/missing` — Unrecorded timetable lectures audit
-- `GET /api/attendance/export-csv` — Export attendance session report as CSV
-- `GET /api/faculty/supervision` — Get faculty supervised clubs, events & volunteering
-- `GET /api/faculty/pending-approvals` — Pending volunteer hours & event proposal approvals
-- `POST /api/faculty/report-conflict` — Faculty schedule conflict notification alert
+### Test Suite Summary
+- **Backend**: 6 test files, **75 passing integration tests**:
+  - `roleAuthManagement.test.js`: 17 tests verifying 5-role authentication, unassigned resource/club rejection, admin staff provisioning, and status suspension.
+  - `attendanceIntegration.test.js`: 9 tests verifying attendance submission-to-history persistence.
+  - `attendanceSystem.test.js`: 16 tests verifying roll-call validation, duplicate checks, and reporting.
+  - `facultyManagement.test.js`: 13 tests verifying faculty provisioning and duty assignments.
+  - `api.test.js`: 18 tests verifying events, marketplace, tutoring, and analytics.
+  - `attendance.test.js`: 2 tests verifying input validation.
+- **Frontend**: 2 passing component & routing tests validating CampusSync branding and multi-role demo access.
 
 ---
 
-## 8. Deployment Readiness
+## 8. Health Check & API Reference
 
-### Frontend (Vercel)
-1. Push repository to GitHub.
-2. Import project into Vercel and select root directory as `client`.
-3. Set Build Command to `npm run build` and Output Directory to `dist`.
-4. Configure environment variable: `VITE_API_URL=https://your-backend.onrender.com`.
+### Health Check Endpoint
+- **`GET /api/health`**  
+  Returns system status, MongoDB connection state, uptime, and official branding:
+  ```json
+  {
+    "status": "ok",
+    "service": "CampusSync API",
+    "tagline": "One Campus. Everything in Sync.",
+    "timestamp": "2026-10-24T13:30:00.000Z",
+    "uptime": 120.45,
+    "database": {
+      "connected": true,
+      "state": "connected"
+    }
+  }
+  ```
 
-### Backend (Render)
-1. Create a Web Service on Render pointing to the `server` directory.
-2. Build Command: `npm install`.
-3. Start Command: `npm start`.
-4. Add environment variables: `MONGODB_URI`, `JWT_SECRET`, `CLIENT_URL`.
+### Selected Core API Endpoints
+
+#### Authentication & Profiles
+- `POST /api/auth/login` — Shared login for all 5 roles (email & password). Returns server-stored role and status.
+- `POST /api/auth/register` — Public student registration (strictly restricted to `role: student`).
+- `GET /api/auth/me` — Fetches current authenticated user profile, assigned clubs, and assigned resources.
+
+#### Dashboards
+- `GET /api/dashboard` — Role-specific metrics for students and faculty.
+- `GET /api/dashboard/coordinator` — Assigned club metrics, member counts, and pending applications.
+- `GET /api/dashboard/resource-manager` — Assigned facility metrics, pending booking requests, and maintenance counts.
+
+#### Staff & Account Administration (Admin Only)
+- `GET /api/admin/users` — Directory of all campus accounts with role and status filters.
+- `POST /api/admin/staff` — Provisions Faculty, Club Coordinator, or Resource Manager accounts with assigned clubs/resources.
+- `PUT /api/admin/staff/:id` — Updates staff profile, designations, and synchronizes club/resource assignments.
+- `PATCH /api/admin/users/:id` — Activates, suspends, or deactivates accounts with last-admin safeguards.
+
+#### Resources & Facilities
+- `GET /api/resources` — List campus halls, labs, and equipment.
+- `POST /api/resources/book` — Submits reservation request with schedule conflict detection.
+- `PATCH /api/resources/bookings/:id/review` — Approves or rejects booking requests (enforces assignment scoping for Resource Managers).
+- `PATCH /api/resources/:id` — Updates facility availability or maintenance status (enforces assignment scoping).
+
+#### Clubs & Organizations
+- `GET /api/clubs` — List campus clubs and societies.
+- `POST /api/clubs/:id/apply` — Student membership application.
+- `PATCH /api/clubs/memberships/:membershipId` — Approves or rejects membership (enforces assignment scoping for Club Coordinators).
+- `POST /api/events` — Publishes event (enforces assigned club scoping for Club Coordinators).
 
 ---
 
-## 9. License & Academic Attribution
-Developed as an enterprise-grade full-stack demonstration for final-year engineering projects. MIT Licensed.
+## 9. Production Deployment Readiness
+
+### Production Checklist
+1. **Environment Variables**:
+   - Ensure `NODE_ENV=production` in server environment.
+   - Configure unique, high-entropy `JWT_SECRET` (minimum 32 characters).
+   - Set `CLIENT_URL` to the deployed frontend domain (e.g. `https://campussync.institution.edu`) to enforce strict production CORS.
+   - Set `MONGODB_URI` pointing to MongoDB Atlas or production replica set.
+   - In frontend, set `VITE_API_URL` to `/api` (if using reverse proxy) or `https://api.campussync.institution.edu/api`.
+2. **Reverse Proxy / Static Serving**:
+   - The Express backend (`server/server.js`) includes static file serving for `client/dist` when hosted as a monolithic container, with client-side SPA routing fallback.
+3. **Database Security**:
+   - MongoDB user credentials should have least-privilege access restricted to the `campussync` database.
+   - Production connection uses TLS/SSL (`ssl=true`).
+4. **File Storage**:
+   - Configurable for local disk or Cloudinary for cloud-persistent media storage.
+
+---
+
+## 10. License & Academic Attribution
+Developed as an enterprise-grade full-stack smart campus management platform for higher education institutions.  
+MIT Licensed. © 2026 CampusSync Team.

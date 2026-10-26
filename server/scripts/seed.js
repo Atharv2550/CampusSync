@@ -129,8 +129,10 @@ export const seedDatabase = async () => {
         role: 'admin',
         department: cseDept._id,
         academicYear: 'Faculty/Staff',
-        studentId: 'STAFF-ADM-001',
-        bio: 'Campus Sphere Chief Platform Administrator and Dean of Student Affairs.',
+        employeeId: 'STAFF-ADM-001',
+        designation: 'Campus Administrator',
+        status: 'active',
+        bio: 'CampusSync Chief Platform Administrator and Dean of Student Affairs.',
         interests: ['Administration', 'Campus Policy', 'Security'],
       },
       {
@@ -143,6 +145,7 @@ export const seedDatabase = async () => {
         studentId: 'FAC-CSE-104',
         employeeId: 'FAC-CSE-104',
         designation: 'Associate Professor',
+        status: 'active',
         bio: 'Associate Professor of Computer Science specializing in Distributed Systems & AI.',
         interests: ['Distributed Systems', 'Research', 'AI Workshops'],
       },
@@ -154,6 +157,8 @@ export const seedDatabase = async () => {
         department: cseDept._id,
         academicYear: '3rd Year',
         studentId: 'CS2023-042',
+        designation: 'Lead Club Coordinator',
+        status: 'active',
         bio: 'Lead Coordinator for Google Developer Student Club & ACM Student Chapter.',
         interests: ['Hackathons', 'Open Source', 'Web Development'],
       },
@@ -164,7 +169,10 @@ export const seedDatabase = async () => {
         role: 'resource_manager',
         department: eeeDept._id,
         academicYear: 'Faculty/Staff',
+        employeeId: 'STAFF-MGR-302',
         studentId: 'STAFF-FAC-302',
+        designation: 'Resource Facility Director',
+        status: 'active',
         bio: 'Campus Resource Coordinator managing halls, labs, and audiovisual equipment.',
         interests: ['Facility Management', 'Lab Safety', 'Equipment Scheduling'],
       },
@@ -176,6 +184,7 @@ export const seedDatabase = async () => {
         department: cseDept._id,
         academicYear: '3rd Year',
         studentId: 'CS2023-118',
+        status: 'active',
         bio: 'Junior CSE student interested in Full-Stack Web Development, Algorithms, and Robotics.',
         interests: ['Hackathons', 'Web Development', 'Robotics', 'Basketball'],
       },
@@ -187,12 +196,18 @@ export const seedDatabase = async () => {
         department: sbmDept._id,
         academicYear: '2nd Year',
         studentId: 'BA2024-055',
+        status: 'active',
         bio: 'Sophomore Business & Tech student, peer tutor in Business Statistics & Microeconomics.',
         interests: ['Business Analytics', 'Tutoring', 'Volunteering', 'Debate'],
       },
     ]);
 
-    const [adminUser, facultyUser, coordUser, resourceManagerUser, studentAlex, studentPriya] = users;
+    const adminUser = users[0];
+    const facultyUser = users[1];
+    const coordUser = users[2];
+    const resourceManagerUser = users[3];
+    const studentAlex = users[4];
+    const studentPriya = users[5];
 
     console.log('[Seed] Seeding Clubs & Societies...');
 
@@ -249,6 +264,7 @@ export const seedDatabase = async () => {
 
     // Link coordinator's assigned club
     coordUser.assignedClub = acmClub._id;
+    coordUser.assignedClubs = [acmClub._id, roboticsClub._id];
     await coordUser.save();
 
     // Club Memberships
@@ -499,8 +515,10 @@ export const seedDatabase = async () => {
         capacity: 120,
         description: 'Acoustically treated tiered seminar hall equipped with twin 4K laser projectors, wireless lapel mics, and lecture capture.',
         operatingHours: { open: '08:00', close: '20:00' },
-        allowedRoles: ['faculty', 'coordinator', 'admin'],
+        allowedRoles: ['faculty', 'coordinator', 'admin', 'resource_manager'],
         department: cseDept._id,
+        managers: [resourceManagerUser._id, ...(users[8] ? [users[8]._id] : [])],
+        isActive: true,
       },
       {
         name: 'Advanced Robotics & IoT Innovation Lab',
@@ -511,6 +529,8 @@ export const seedDatabase = async () => {
         operatingHours: { open: '09:00', close: '19:00' },
         allowedRoles: ['student', 'faculty', 'coordinator', 'resource_manager', 'admin'],
         department: eeeDept._id,
+        managers: [resourceManagerUser._id, ...(users[8] ? [users[8]._id] : [])],
+        isActive: true,
       },
       {
         name: 'High-Performance 4K Projector & Audio Kit #1',
@@ -520,6 +540,8 @@ export const seedDatabase = async () => {
         description: 'Portable Epson 4K projector, tripod projection screen, HDMI splitters, and JBL Bluetooth PA speaker in road case.',
         operatingHours: { open: '08:00', close: '18:00' },
         allowedRoles: ['student', 'faculty', 'coordinator', 'resource_manager', 'admin'],
+        managers: [resourceManagerUser._id, ...(users[8] ? [users[8]._id] : [])],
+        isActive: true,
       },
       {
         name: 'Multimedia & Podcast Recording Studio',
@@ -529,8 +551,13 @@ export const seedDatabase = async () => {
         description: 'Sound-isolated acoustic recording room with 4 Shure SM7B mics, audio interface, and green screen backdrop.',
         operatingHours: { open: '10:00', close: '21:00' },
         allowedRoles: ['student', 'faculty', 'coordinator', 'admin'],
+        managers: [resourceManagerUser._id],
+        isActive: true,
       },
     ]);
+
+    resourceManagerUser.assignedResources = resources.map((r) => r._id);
+    await resourceManagerUser.save();
 
     // Bookings
     const bookingDate = new Date(now.getTime() + 2 * 24 * 60 * 60 * 1000);

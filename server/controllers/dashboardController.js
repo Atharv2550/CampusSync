@@ -14,6 +14,7 @@ import { Club } from '../models/Club.js';
 import { TimetableEntry } from '../models/TimetableEntry.js';
 import { DutyAssignment } from '../models/DutyAssignment.js';
 import { LectureAttendance } from '../models/LectureAttendance.js';
+import { CampusResource } from '../models/CampusResource.js';
 import { findPotentialMatches } from '../services/matchingService.js';
 
 export const getStudentDashboard = async (req, res, next) => {
@@ -319,6 +320,164 @@ export const getFacultyDashboard = async (req, res, next) => {
         announcements,
         unreadNotifications,
         recentAttendance,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getCoordinatorDashboard = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const singleAssigned = user.assignedClub?._id || user.assignedClub;
+    const multiAssigned = (user.assignedClubs || []).map((c) => c._id || c);
+    const directClubs = await Club.find({ coordinators: user._id }).select('_id');
+    const directClubIds = directClubs.map((c) => c._id);
+
+    const allAssignedClubIds = Array.from(
+      new Set(
+        [singleAssigned, ...multiAssigned, ...directClubIds]
+          .filter(Boolean)
+          .map((id) => id.toString())
+      )
+    );
+
+    const clubs = await Club.find({
+      _id: { $in: allAssignedClubIds },
+    }).populate('department', 'name code');
+
+    // Pending membership applications
+    const pendingMemberships = await ClubMembership.find({
+      club: { $in: allAssignedClubIds },
+      status: 'pending',
+    })
+      .populate('user', 'fullName email avatar studentId department')
+      .populate('club', 'name code')
+      .sort({ createdAt: -1 });
+
+    // Active approved members count
+    const approvedMembersCount = await ClubMembership.countDocuments({
+      club: { $in: allAssignedClubIds },
+      status: 'approved',
+    });
+
+    // Upcoming club events
+    const upcomingEvents = await Event.find({
+      club: { $in: allAssignedClubIds },
+      startDate: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    })
+      .populate('club', 'name code')
+      .sort({ startDate: 1 })
+      .limit(6);
+
+    // Volunteering drives organized by assigned clubs
+    const volunteeringDrives = await VolunteeringActivity.find({
+      club: { $in: allAssignedClubIds },
+    })
+      .populate('club', 'name code')
+      .sort({ date: -1 })
+      .limit(6);
+
+    // Recent announcements
+    const announcements = await Announcement.find({ isPublished: true })
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    // Unread notifications count
+    const unreadNotifications = await Notification.countDocuments({
+      recipient: user._id,
+      isRead: false,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        assignedClubs: clubs,
+        totalAssignedClubs: clubs.length,
+        pendingMemberships,
+        pendingMembershipsCount: pendingMemberships.length,
+        approvedMembersCount,
+        upcomingEvents,
+        upcomingEventsCount: upcomingEvents.length,
+        volunteeringDrives,
+        volunteeringDrivesCount: volunteeringDrives.length,
+        announcements,
+        unreadNotifications,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getResourceManagerDashboard = async (req, res, next) => {
+  try {
+    const user = req.user;
+    const fromUser = (user.assignedResources || []).map((r) => (r._id ? r._id.toString() : r.toString()));
+    const managed = await CampusResource.find({ managers: user._id }).select('_id');
+    const authorizedIds = Array.from(new Set([...fromUser, ...managed.map((m) => m._id.toString())]));
+
+    const resources = await CampusResource.find({
+      _id: { $in: authorizedIds },
+    }).populate('department', 'name code');
+
+    // Pending booking requests
+    const pendingBookings = await ResourceBooking.find({
+      resource: { $in: authorizedIds },
+      status: 'Pending',
+    })
+      .populate('resource', 'name type location operatingHours capacity')
+      .populate('requestedBy', 'fullName email department avatar role studentId')
+      .sort({ date: 1, startTime: 1 });
+
+    // Upcoming approved bookings
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const upcomingApprovedBookings = await ResourceBooking.find({
+      resource: { $in: authorizedIds },
+      status: 'Approved',
+      date: { $gte: today },
+    })
+      .populate('resource', 'name type location')
+      .populate('requestedBy', 'fullName email department avatar role')
+      .sort({ date: 1, startTime: 1 })
+      .limit(10);
+
+    // Maintenance resources count
+    const maintenanceCount = resources.filter((r) => r.isMaintenance).length;
+
+    // Total lifetime approved bookings count
+    const totalApprovedBookings = await ResourceBooking.countDocuments({
+      resource: { $in: authorizedIds },
+      status: 'Approved',
+    });
+
+    // Recent announcements
+    const announcements = await Announcement.find({ isPublished: true })
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    // Unread notifications
+    const unreadNotifications = await Notification.countDocuments({
+      recipient: user._id,
+      isRead: false,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        assignedResources: resources,
+        totalAssignedResources: resources.length,
+        maintenanceCount,
+        pendingBookings,
+        pendingBookingsCount: pendingBookings.length,
+        upcomingApprovedBookings,
+        upcomingApprovedCount: upcomingApprovedBookings.length,
+        totalApprovedBookings,
+        announcements,
+        unreadNotifications,
       },
     });
   } catch (error) {

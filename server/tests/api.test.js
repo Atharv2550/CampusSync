@@ -16,7 +16,7 @@ describe('CampusSphere Backend API Integration Tests', () => {
     const res = await request(app).get('/api/health');
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('healthy');
-    expect(res.body.platform).toBe('CampusSphere API');
+    expect(res.body.platform).toBe('CampusSync API');
   });
 
   it('Student login with valid credentials returns JWT token and profile', async () => {

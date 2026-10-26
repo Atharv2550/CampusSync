@@ -157,6 +157,19 @@ export const applyForMembership = async (req, res, next) => {
   }
 };
 
+const checkIsClubCoordinatorOrAdmin = (user, club) => {
+  if (!user || !club) return false;
+  if (user.role === 'admin') return true;
+  if (user.role !== 'coordinator') return false;
+
+  const clubId = club._id.toString();
+  const directCoordinator = (club.coordinators || []).some((c) => (c._id || c).toString() === user._id.toString());
+  const singleAssigned = (user.assignedClub?._id || user.assignedClub)?.toString();
+  const multiAssigned = (user.assignedClubs || []).map((c) => (c._id || c).toString());
+
+  return directCoordinator || singleAssigned === clubId || multiAssigned.includes(clubId);
+};
+
 export const getClubMembers = async (req, res, next) => {
   try {
     const club = await Club.findById(req.params.id);
@@ -164,15 +177,10 @@ export const getClubMembers = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Club not found' });
     }
 
-    const isCoordinator =
-      req.user &&
-      (req.user.role === 'admin' ||
-        club.coordinators.some((c) => c.toString() === req.user._id.toString()));
-
-    if (!isCoordinator) {
+    if (!checkIsClubCoordinatorOrAdmin(req.user, club)) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied: Only coordinators and administrators can view full applications.',
+        message: 'Access denied: You can only view members for your assigned club.',
       });
     }
 
@@ -199,13 +207,10 @@ export const reviewMembership = async (req, res, next) => {
     }
 
     const club = await Club.findById(membership.club._id);
-    const isCoordinator =
-      req.user.role === 'admin' || club.coordinators.some((c) => c.toString() === req.user._id.toString());
-
-    if (!isCoordinator) {
+    if (!checkIsClubCoordinatorOrAdmin(req.user, club)) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied: You are not authorized to review applications for this club.',
+        message: 'Access denied: You can only review applications for your assigned club.',
       });
     }
 
@@ -245,13 +250,10 @@ export const assignCommitteeRole = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Club not found' });
     }
 
-    const isCoordinator =
-      req.user.role === 'admin' || club.coordinators.some((c) => c.toString() === req.user._id.toString());
-
-    if (!isCoordinator) {
+    if (!checkIsClubCoordinatorOrAdmin(req.user, club)) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied: Only club coordinators or admins can assign committee roles.',
+        message: 'Access denied: You can only assign committee roles for your assigned club.',
       });
     }
 

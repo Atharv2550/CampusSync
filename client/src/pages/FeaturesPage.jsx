@@ -103,7 +103,7 @@ export const FeaturesPage = () => {
           Complete Feature Specification
         </Typography>
         <Typography variant="body1" sx={{ color: '#64748b', maxWidth: 650, mx: 'auto' }}>
-          Explore the exact server-enforced mechanics and user features powering CampusSphere.
+          Explore the exact server-enforced mechanics and user features powering CampusSync.
         </Typography>
       </Box>
 
