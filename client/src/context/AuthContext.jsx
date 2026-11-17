@@ -40,7 +40,13 @@ export const AuthProvider = ({ children }) => {
   // Initialize Socket.IO connection when user and token are ready
   useEffect(() => {
     if (token && user) {
-      const newSocket = io(window.location.origin, {
+      const socketServerUrl =
+        import.meta.env.VITE_SOCKET_URL ||
+        (import.meta.env.VITE_API_URL
+          ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '')
+          : window.location.origin);
+
+      const newSocket = io(socketServerUrl, {
         auth: { token },
       });
 

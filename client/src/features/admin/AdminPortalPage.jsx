@@ -57,6 +57,7 @@ import {
 import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
 import { AdminTimetableManagement } from './AdminTimetableManagement';
+import { AdminSubjectEnrollmentManagement } from './AdminSubjectEnrollmentManagement';
 
 const FACULTY_DESIGNATIONS = [
   'Professor',
@@ -486,6 +487,7 @@ export const AdminPortalPage = () => {
         <Tab label="Security Audit Logs" />
         <Tab label="Platform Policies & Settings" />
         <Tab label="Faculty Timetables & Duties" />
+        <Tab label="Subject & Enrollment Management" />
       </Tabs>
 
       {/* Tab 0: User Accounts Directory */}
@@ -998,6 +1000,9 @@ export const AdminPortalPage = () => {
           autoOpenTimetable={false}
         />
       )}
+
+      {/* Tab 5: Subject & Enrollment Management */}
+      {tab === 5 && <AdminSubjectEnrollmentManagement />}
 
       {/* Modal: Add Staff Member */}
       <Dialog

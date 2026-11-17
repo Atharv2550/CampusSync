@@ -118,11 +118,21 @@ export const AdminTimetableManagement = ({ initialFacultyId = null, autoOpenTime
         const targetFac = initialFacultyId
           ? (faculties.find((f) => f._id === initialFacultyId) || faculties[0])
           : faculties[0];
+        const firstSub = subjectsRes.data.data?.[0];
+        const firstCls = classesRes.data.data?.[0];
+        const resolvedDept =
+          targetFac.department?._id ||
+          targetFac.department ||
+          firstSub?.department?._id ||
+          firstSub?.department ||
+          firstCls?.department?._id ||
+          firstCls?.department ||
+          '';
 
         setTimetableForm((prev) => ({
           ...prev,
           faculty: targetFac._id,
-          department: targetFac.department?._id || targetFac.department || '',
+          department: resolvedDept,
         }));
         setDutyForm((prev) => ({ ...prev, faculty: targetFac._id }));
       }
@@ -200,7 +210,23 @@ export const AdminTimetableManagement = ({ initialFacultyId = null, autoOpenTime
 
     try {
       setSavingEntry(true);
-      await api.post('/timetable/admin', timetableForm);
+      const selSub = subjects.find((s) => s._id === timetableForm.subject);
+      const selFac = facultyUsers.find((f) => f._id === timetableForm.faculty);
+      const selCls = classes.find((c) => c._id === timetableForm.classDivision);
+      const resolvedDept =
+        timetableForm.department ||
+        selSub?.department?._id ||
+        selSub?.department ||
+        selFac?.department?._id ||
+        selFac?.department ||
+        selCls?.department?._id ||
+        selCls?.department ||
+        '';
+
+      await api.post('/timetable/admin', {
+        ...timetableForm,
+        department: resolvedDept,
+      });
       showSuccess('Timetable entry created, published, and faculty notified!');
       setOpenTimetableModal(false);
       setConflictCheckResult(null);
@@ -515,11 +541,22 @@ export const AdminTimetableManagement = ({ initialFacultyId = null, autoOpenTime
               label="Select Faculty Member"
               value={timetableForm.faculty}
               onChange={(e) => {
-                const f = facultyUsers.find((u) => u._id === e.target.value);
+                const facId = e.target.value;
+                const f = facultyUsers.find((u) => u._id === facId);
+                const sub = subjects.find((s) => s._id === timetableForm.subject);
+                const cls = classes.find((c) => c._id === timetableForm.classDivision);
+                const resolvedDept =
+                  f?.department?._id ||
+                  f?.department ||
+                  sub?.department?._id ||
+                  sub?.department ||
+                  cls?.department?._id ||
+                  cls?.department ||
+                  timetableForm.department;
                 setTimetableForm({
                   ...timetableForm,
-                  faculty: e.target.value,
-                  department: f?.department?._id || f?.department || timetableForm.department,
+                  faculty: facId,
+                  department: resolvedDept,
                 });
               }}
               size="small"
@@ -538,7 +575,25 @@ export const AdminTimetableManagement = ({ initialFacultyId = null, autoOpenTime
                   fullWidth
                   label="Subject"
                   value={timetableForm.subject}
-                  onChange={(e) => setTimetableForm({ ...timetableForm, subject: e.target.value })}
+                  onChange={(e) => {
+                    const subId = e.target.value;
+                    const sub = subjects.find((s) => s._id === subId);
+                    const f = facultyUsers.find((u) => u._id === timetableForm.faculty);
+                    const cls = classes.find((c) => c._id === timetableForm.classDivision);
+                    const resolvedDept =
+                      sub?.department?._id ||
+                      sub?.department ||
+                      f?.department?._id ||
+                      f?.department ||
+                      cls?.department?._id ||
+                      cls?.department ||
+                      timetableForm.department;
+                    setTimetableForm({
+                      ...timetableForm,
+                      subject: subId,
+                      department: resolvedDept,
+                    });
+                  }}
                   size="small"
                 >
                   {subjects.map((s) => (
@@ -555,7 +610,25 @@ export const AdminTimetableManagement = ({ initialFacultyId = null, autoOpenTime
                   fullWidth
                   label="Class Cohort"
                   value={timetableForm.classDivision}
-                  onChange={(e) => setTimetableForm({ ...timetableForm, classDivision: e.target.value })}
+                  onChange={(e) => {
+                    const clsId = e.target.value;
+                    const cls = classes.find((c) => c._id === clsId);
+                    const sub = subjects.find((s) => s._id === timetableForm.subject);
+                    const f = facultyUsers.find((u) => u._id === timetableForm.faculty);
+                    const resolvedDept =
+                      cls?.department?._id ||
+                      cls?.department ||
+                      sub?.department?._id ||
+                      sub?.department ||
+                      f?.department?._id ||
+                      f?.department ||
+                      timetableForm.department;
+                    setTimetableForm({
+                      ...timetableForm,
+                      classDivision: clsId,
+                      department: resolvedDept,
+                    });
+                  }}
                   size="small"
                 >
                   {classes.map((c) => (

@@ -29,5 +29,8 @@
     "mongodb"
   ],
   "author": "CampusSync Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "cloudinary": "^2.11.0"
+  }
 }

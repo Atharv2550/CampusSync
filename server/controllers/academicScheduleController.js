@@ -2,6 +2,7 @@ import { TimetableEntry } from '../models/TimetableEntry.js';
 import { DutyAssignment } from '../models/DutyAssignment.js';
 import { Subject } from '../models/Subject.js';
 import { ClassDivision } from '../models/ClassDivision.js';
+import { Department } from '../models/Department.js';
 import { User } from '../models/User.js';
 import { AuditLog } from '../models/AuditLog.js';
 import { notifyUser } from '../services/notificationService.js';
@@ -149,11 +150,41 @@ export const createTimetableEntry = async (req, res, next) => {
       });
     }
 
+    // Auto-resolve department: explicitly passed -> Subject -> ClassDivision -> Faculty -> default active department
+    let entryDept = department;
+    if (!entryDept || entryDept === '') {
+      if (subject) {
+        const subDoc = await Subject.findById(subject);
+        if (subDoc?.department) entryDept = subDoc.department;
+      }
+      if (!entryDept && classDivision) {
+        const classDoc = await ClassDivision.findById(classDivision);
+        if (classDoc?.department) entryDept = classDoc.department;
+      }
+      if (!entryDept && faculty) {
+        const facDoc = await User.findById(faculty);
+        if (facDoc?.department) entryDept = facDoc.department;
+      }
+      if (!entryDept) {
+        const defaultDept = (await Department.findOne({ isActive: true })) || (await Department.findOne());
+        if (defaultDept) entryDept = defaultDept._id;
+      }
+    }
+
+    // Automatically assign faculty to this department if faculty record has no department
+    if (faculty && entryDept) {
+      const facDoc = await User.findById(faculty);
+      if (facDoc && !facDoc.department) {
+        facDoc.department = entryDept;
+        await facDoc.save().catch(() => null);
+      }
+    }
+
     const entry = await TimetableEntry.create({
       faculty,
       subject,
       classDivision,
-      department,
+      department: entryDept,
       dayOfWeek,
       startTime,
       endTime,
@@ -204,6 +235,10 @@ export const updateTimetableEntry = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updates = req.body;
+
+    if (updates.department === '' || updates.department === null) {
+      delete updates.department;
+    }
 
     const existing = await TimetableEntry.findById(id);
     if (!existing) {

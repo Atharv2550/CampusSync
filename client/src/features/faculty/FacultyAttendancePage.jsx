@@ -154,7 +154,12 @@ export const FacultyAttendancePage = () => {
   const loadStudentsForClass = async (subItem, options = {}) => {
     if (!subItem?.classDivision?._id) return;
     try {
-      const res = await api.get(`/classes/${subItem.classDivision._id}/students`);
+      const res = await api.get(`/classes/${subItem.classDivision._id}/students`, {
+        params: {
+          subject: subItem.subject._id,
+          date: options.dateStr || lectureDate,
+        },
+      });
       const stuList = res.data.data || [];
       setStudents(stuList);
 
@@ -239,6 +244,7 @@ export const FacultyAttendancePage = () => {
     setLectureDate(newDate);
     const subItem = assignedSubjects[Number(selectedSubjectKey)];
     if (subItem) {
+      loadStudentsForClass(subItem, { dateStr: newDate });
       const slots = getSlotsForDate(subItem, newDate);
       if (slots.length > 0) {
         setStartTime(slots[0].startTime);

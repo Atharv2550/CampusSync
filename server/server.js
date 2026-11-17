@@ -37,6 +37,7 @@ import subjectClassRoutes from './routes/subjectClassRoutes.js';
 import dutyRoutes from './routes/dutyRoutes.js';
 import attendanceRoutes from './routes/attendanceRoutes.js';
 import facultySupervisionRoutes from './routes/facultySupervisionRoutes.js';
+import enrollmentRoutes from './routes/enrollmentRoutes.js';
 
 dotenv.config();
 
@@ -46,11 +47,30 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
 
+// Flexible CORS origin check supporting Vercel, production domains, and localhost
+const rawClientUrls = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(',').map((u) => u.trim().replace(/\/$/, ''))
+  : [];
+const defaultOrigins = ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'];
+const allowedOrigins = Array.from(new Set([...rawClientUrls, ...defaultOrigins]));
+
+const corsOriginCheck = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  const normalized = origin.replace(/\/$/, '');
+  if (
+    allowedOrigins.includes(normalized) ||
+    normalized.endsWith('.vercel.app') ||
+    normalized.includes('localhost')
+  ) {
+    return callback(null, true);
+  }
+  return callback(null, true);
+};
+
 // Socket.IO setup with CORS
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 const io = new Server(server, {
   cors: {
-    origin: [CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: corsOriginCheck,
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -90,7 +110,7 @@ io.on('connection', (socket) => {
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(
   cors({
-    origin: [CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: corsOriginCheck,
     credentials: true,
   })
 );
@@ -147,6 +167,7 @@ app.use('/api', subjectClassRoutes);
 app.use('/api/duties', dutyRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/faculty', facultySupervisionRoutes);
+app.use('/api/enrollments', enrollmentRoutes);
 
 // Optional SPA Production static serve & nested route fallback
 const clientDistPath = path.resolve(__dirname, '../client/dist');

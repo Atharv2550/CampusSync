@@ -85,6 +85,7 @@ export const AppLayout = () => {
   // Base navigation items available to students & community
   const navItems = [
     { text: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
+    { text: 'My Subjects', path: '/student/subjects', icon: <SubjectsIcon /> },
     { text: 'Campus Events', path: '/events', icon: <EventIcon /> },
     { text: 'Lost & Found', path: '/lost-found', icon: <SearchIcon /> },
     { text: 'Marketplace', path: '/marketplace', icon: <MarketplaceIcon /> },

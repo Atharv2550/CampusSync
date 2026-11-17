@@ -70,7 +70,11 @@ export const FacultySubjectsPage = () => {
     setRosterModalOpen(true);
     try {
       setRosterLoading(true);
-      const res = await api.get(`/classes/${classDivision._id}/students`);
+      const res = await api.get(`/classes/${classDivision._id}/students`, {
+        params: {
+          subject: subject._id,
+        },
+      });
       setStudents(res.data.data || []);
     } catch (err) {
       console.error('Failed to load class roster:', err);

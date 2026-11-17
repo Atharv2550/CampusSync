@@ -6,6 +6,7 @@ import { Subject } from '../models/Subject.js';
 import { ClassDivision } from '../models/ClassDivision.js';
 import { User } from '../models/User.js';
 import { AuditLog } from '../models/AuditLog.js';
+import { StudentSubjectEnrollment } from '../models/StudentSubjectEnrollment.js';
 
 // Helper to normalize dates to UTC midnight to avoid timezone shifting
 const normalizeDate = (dateInput) => {
@@ -122,6 +123,32 @@ export const recordAttendance = async (req, res, next) => {
           success: false,
           message: 'Authorization failed: You are not authorized to record attendance for this class and subject.',
         });
+      }
+    }
+
+    // 3.1 Verify student enrollment roster for this subject
+    const activeEnrollmentsCount = await StudentSubjectEnrollment.countDocuments({
+      subject,
+      status: 'enrolled',
+    });
+
+    if (activeEnrollmentsCount > 0) {
+      const activeEnrollments = await StudentSubjectEnrollment.find({
+        subject,
+        status: 'enrolled',
+        effectiveEnrollmentDate: { $lte: normalizedLectureDate },
+        $or: [{ effectiveEndDate: null }, { effectiveEndDate: { $gt: normalizedLectureDate } }],
+      }).select('student');
+
+      const enrolledStudentIdSet = new Set(activeEnrollments.map((e) => e.student.toString()));
+
+      for (const rec of sanitizedRecords) {
+        if (!enrolledStudentIdSet.has(rec.student.toString())) {
+          return res.status(422).json({
+            success: false,
+            message: `Attendance rejected: Student ${rec.student} is not actively enrolled in this subject on the session date (${normalizedLectureDate.toISOString().split('T')[0]}).`,
+          });
+        }
       }
     }
 

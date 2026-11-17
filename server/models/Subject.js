@@ -47,6 +47,31 @@ const subjectSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    status: {
+      type: String,
+      enum: ['active', 'inactive'],
+      default: 'active',
+      index: true,
+    },
+    eligibleClasses: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ClassDivision',
+      },
+    ],
+    assignedFaculty: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    selfEnrollmentAllowed: {
+      type: Boolean,
+      default: true,
+    },
+    maxCapacity: {
+      type: Number,
+      default: 60,
+    },
   },
   {
     timestamps: true,

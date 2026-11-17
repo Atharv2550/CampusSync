@@ -36,6 +36,7 @@ import {
 
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
+import { StudentSubjectEnrollmentSection } from './StudentSubjectEnrollmentSection';
 
 export const StudentDashboard = () => {
   const navigate = useNavigate();
@@ -233,6 +234,9 @@ export const StudentDashboard = () => {
       <Grid container spacing={3}>
         {/* Left Column: Registered Events & Recommended Events */}
         <Grid item xs={12} lg={8}>
+          {/* My Subjects & Course Enrollment Section */}
+          <StudentSubjectEnrollmentSection />
+
           {/* Upcoming Registered Events */}
           <Paper sx={{ p: 3, borderRadius: 3, mb: 3.5, border: '1px solid #e2e8f0' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>

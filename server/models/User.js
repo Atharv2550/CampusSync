@@ -33,6 +33,12 @@ const userSchema = new mongoose.Schema(
       ref: 'Department',
       default: null,
     },
+    classDivision: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ClassDivision',
+      default: null,
+      index: true,
+    },
     academicYear: {
       type: String,
       enum: ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduate', 'Faculty/Staff', 'N/A'],

@@ -55,6 +55,7 @@ import { VolunteeringRecordsPage } from './features/volunteering/VolunteeringRec
 import { AnalyticsPage } from './features/analytics/AnalyticsPage';
 import { AdminPortalPage } from './features/admin/AdminPortalPage';
 import { ProfilePage } from './features/profile/ProfilePage';
+import { StudentSubjectsPage } from './features/student/StudentSubjectsPage';
 
 function DashboardRouter() {
   const { user } = useAuth();
@@ -97,6 +98,7 @@ export function App() {
                 <Route element={<ProtectedRoute />}>
                   <Route element={<AppLayout />}>
                     <Route path="/dashboard" element={<DashboardRouter />} />
+                    <Route path="/student/subjects" element={<StudentSubjectsPage />} />
                     <Route path="/events" element={<EventsPage />} />
                     <Route path="/events/:id" element={<EventDetailPage />} />
                     <Route path="/lost-found" element={<LostFoundPage />} />
